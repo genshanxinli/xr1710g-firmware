@@ -74,15 +74,15 @@
 | D0-5 | 测试机装 bash（opkg） | AI+人工 | `command -v bash` | D0-4（密钥） | ⏳ D0-4 后 |
 | D1 | **消解启动**：device-layer re-roll 对齐现网 main（v2 补丁集，10 文件） | AI | 冲突清单清零 | D0-3 | ✅ 2026-08-17（v2 全绿 + defconfig 三断言） |
 | D2 | CI xr1710g 档转绿（w1700k 占位档绿灯对照） | AI | Actions 绿 | D1 | 🚧 **RUNNING**（run 31963237947，push 触发 2026-08-17，全量构建 ~1.5–2.5h；状态查 API runs/31963237947） |
-| D3 | 首版镜像三件套（sysupgrade/initramfs-recovery/chainload-uboot） | AI | artifact 齐全 | D2 | ⏳ |
-| D4 | 产物自检 + sha256 归档（对照双路径冲突面复核） | AI | 清单 | D3 | ⏳ |
+| D3 | 首版镜像三件套（sysupgrade/initramfs-recovery/chainload-uboot） | AI | artifact 齐全 | D2 | ⏳ 工具就绪：fetch-artifacts.sh（凭据 PAT 已验证可下载） |
+| D4 | 产物自检 + sha256 归档（对照双路径冲突面复核） | AI | 清单 | D3 | ⏳ 工具就绪：check-artifacts.sh（逻辑实测 PASS） |
 | D5 | 真机回归管线：冒烟脚本 + collect.sh --host 打通 | AI | 冒烟跑通（7/1/0 实测 ✅）；一次全量 real 采集 | D0-4/D0-5 | 🚧 smoke.sh 已落地并实测；collect.sh 待 bash+密钥 |
 | D6 | **首刷人工放行**：AI 产镜像 + 刷机卡 → 通知用户 → 用户手动刷入 → 回报 | 人工 | 首刷成功日志 | D3/D5 | ⏳ 待人工 |
 | D7–D13 | 每日真机回归循环（冒烟 + NPU v0 回填 + 条件专项）+ P0/P1 修复迭代 | AI+人工兜底 | 逐日报告；P0/P1→0 | D6 | ⏳ |
 | D14 | **v0.1 锁基线**（P0/P1=0）→ 恢复上游跟随 → 私人 alpha 交付 | AI+人工 | 基线锁定 + alpha 交付 | D7–D13 | ⏳ |
 
 关联待办（非 D 序列）：
-- known-issues 清单建立（首个 P2/P3 出现即建，`docs/testing/known-issues.md` 或并入 tracking）
+- ~~known-issues 清单~~ → 模板已建 `docs/testing/known-issues.md`（P2/P3 分级 + 社区基线参照归属口径）
 - ~~build.yml 注释与策略同步~~ → D1 已完成（双路径 v2；主动消解第三路径流程见 ADR-0003 修订）
 
 ## 5. 交接协议（新会话必读）
@@ -110,6 +110,12 @@
   落地并实测 **PASS=7 WARN=1→0 FAIL=0**（6GHz 频段未枚举修正为已知态）；发现基线事实：
   phy0 只枚举 2.4/5GHz 信道，6GHz 需自建镜像 enable radio2 后验证。
   build.yml 策略注释同步归 D1。
+- **2026-08-17 · 目标轮 2 续**：D3/D4/D6 工具就绪——`build/fetch-artifacts.sh`（git 凭据
+  PAT 已实测可访问 Actions 产物 API）、`build/check-artifacts.sh`（三件套+GPL 校验，逻辑
+  实测 PASS）、`docs/sop/flash-card-template.md`（D6 人工卡）、`docs/testing/known-issues.md`
+  （P2/P3 留档模板）；已提交推送（c0fdf9b）。run 31963237947 双 job 仍在构建
+  （world ~1.5–2.5h）。遗留：查 run 状态 → 绿则 `bash build/fetch-artifacts.sh <run-id>`；
+  D0-4 公钥安装待用户。
 
 ## 7. 入库存档红线
 
