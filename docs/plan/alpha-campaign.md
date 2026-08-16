@@ -131,11 +131,15 @@
   UTC）；结构性修复**本地完成**（脚本→tools/ci/ 并修路径、.gitignore += build/artifacts/、
   build.yml 触发收窄为 patches/configs）——**只本地提交未推送**（避免再次触发取消）；
   推送随 run 完成后的下一批。遗留同前：D2 待绿、D0-4 公钥待用户。
+- **2026-08-17 · 目标轮 5**：D7 回归驱动 `tools/regression/run-daily.sh` 落地 + smoke.sh 修
+  两真 bug（busybox `tr -d '[:space:]'` 字符类陷阱 → 改 grep -oE；bash 探测 "no-bash" 误判）
+  → 回归 **8/8 全 PASS**（报告 docs/tracking/regression-2026-08-16.md）；提交推送 47ba394。
+- **2026-08-17 · 目标轮 6**：run 31963637357 又被 cancelled——根因 = `git push` 推整分支，
+  结构性修复 6ee1e7e 随 47ba394 一并推送（改动 build.yml 自身 → 必触发）→ 新 run
+  31964412187（18:22）取代之。**修复现已远端生效**（后续 tools/docs 推送不再触发构建）。
+  当前 run 31964412187 双 job 已达 feeds 阶段（冷构建 ETA ~21:30 UTC）。
 
 ## 7. 入库存档红线
 
 - 不提交：SSH/PPPoE 凭据、内网敏感拓扑；此文档 §2 已打码（仅公网侧 IP 与网段）。
-- README/CONTEXT/ADR 只承载概念与决策，不承载任何访问凭证。- **2026-08-17 · 目标轮 6**：run 31963637357 又被 cancelled——根因 = `git push` 推整分支，
-  结构性修复 6ee1e7e 随 47ba394 一并推送（改动 build.yml 自身 → 必触发）→ 新 run
-  31964412187（18:22）取代之。**修复现已远端生效**（后续 tools/docs 推送不再触发构建）。
-  当前 run 31964412187 双 job 已达 feeds 阶段（冷构建 ETA ~21:30 UTC）。
+- README/CONTEXT/ADR 只承载概念与决策，不承载任何访问凭证。
