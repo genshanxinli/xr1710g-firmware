@@ -70,13 +70,13 @@
 | D0-1 | SSH 接入验证（192.168.123.1:22 + 密码登录） | AI | AUTHPASS_OK | — | ✅ 2026-08-17 |
 | D0-2 | 只读基线采集（版本/接口/无线/NPU/mem） | AI | §2 全项 | D0-1 | ✅ 2026-08-17 |
 | D0-3 | 文档修订（ADR-0001/0003 + CONTEXT.md + 本 kanban + README 索引） | AI | 各修订落盘 | — | ✅ 2026-08-17 |
-| D0-4 | **公钥装进路由器**（authorized_keys） | 人工 | `ssh -i key` 免密 | — | ⏳ 待人工（用户） |
-| D0-5 | 测试机装 bash（opkg） | AI+人工 | `command -v bash` | D0-4（密钥） | ⏳ D0-4 后 |
+| D0-4 | **公钥装进路由器**（authorized_keys） | 人工 | `ssh -i key` 免密 | — | ✅ 2026-08-17（用户已装；~/.ssh/config 已配专用密钥） |
+| D0-5 | 测试机装 bash | AI+人工 | `command -v bash` | D0-4（密钥） | ✅ 2026-08-17（apk 装 bash 5.3.15；**本线无 opkg=apk 系**） |
 | D1 | **消解启动**：device-layer re-roll 对齐现网 main（v2 补丁集，10 文件） | AI | 冲突清单清零 | D0-3 | ✅ 2026-08-17（v2 全绿 + defconfig 三断言） |
-| D2 | CI xr1710g 档转绿（w1700k 占位档绿灯对照） | AI | Actions 绿 | D1 | 🚧 **RUNNING**（run 31964412187，18:22 起；⚠️ 前两 run 均被本仓推送取消——教训见关联待办，修复已生效） |
+| D2 | CI xr1710g 档转绿（w1700k 占位档绿灯对照） | AI | Actions 绿 | D1 | 🚧 **RUNNING**（run 31965156465 = workflow_dispatch 18:37，双 job make 中；上游/PR 未动，dispatch 源=调度 sync-detect 空档或手动；⚠️ 调度 run 的 build job 与新 dispatch 抢 concurrency 组互 cancel——优化项见关联待办） |
 | D3 | 首版镜像三件套（sysupgrade/initramfs-recovery/chainload-uboot） | AI | artifact 齐全 | D2 | ⏳ 工具就绪：tools/ci/fetch-artifacts.sh（凭据 PAT 已验证可下载） |
 | D4 | 产物自检 + sha256 归档（对照双路径冲突面复核） | AI | 清单 | D3 | ⏳ 工具就绪：tools/ci/check-artifacts.sh（逻辑实测 PASS） |
-| D5 | 真机回归管线：冒烟 + 每日驱动 + collect.sh | AI | run-daily 8/8 PASS ✅；一次全量 real 采集 | D0-4/D0-5 | 🚧 smoke/run-daily 落地实测 8/8；collect.sh 待 bash+密钥 |
+| D5 | 真机回归管线：冒烟 + 每日驱动 + collect.sh | AI | run-daily 8/8 PASS ✅；全量 real 采集 ✅ | D0-4/D0-5 | ✅ 2026-08-17 首轮全量 run 入库（OK28/NA15/43；NA=本线观测面缺口，供 M2 对照） |
 | D6 | **首刷人工放行**：AI 产镜像 + 刷机卡 → 通知用户 → 用户手动刷入 → 回报 | 人工 | 首刷成功日志 | D3/D5 | ⏳ 待人工 |
 | D7–D13 | 每日真机回归循环（冒烟 + NPU v0 回填 + 条件专项）+ P0/P1 修复迭代 | AI+人工兜底 | 逐日报告；P0/P1→0 | D6 | ⏳ |
 | D14 | **v0.1 锁基线**（P0/P1=0）→ 恢复上游跟随 → 私人 alpha 交付 | AI+人工 | 基线锁定 + alpha 交付 | D7–D13 | ⏳ |
@@ -84,6 +84,10 @@
 关联待办（非 D 序列）：
 - ~~known-issues 清单~~ → 模板已建 `docs/testing/known-issues.md`（P2/P3 分级 + 社区基线参照归属口径）
 - ~~build.yml 注释与策略同步~~ → D1 已完成（双路径 v2；主动消解第三路径流程见 ADR-0003 修订）
+- **post-alpha 优化**：每 6h 调度 cron 触发的 workflow 自带 build job，与 sync-detect
+  dispatch 的新 run 抢同一 concurrency 组（互 cancel）——应让调度仅跑 sync-detect、
+  构造由 dispatch 独占；另 sync-detect 首次空档会把「上游动了」误判为 changed（已观察到
+  18:37 dispatch，实况上游/PR 均未动）
 - **结构性修复（✅ 已在远端生效）**：`fetch/check-artifacts.sh` 已移出 `build/`（→
   `tools/ci/`，路径已修）+ `.gitignore` 加 `build/artifacts/` + build.yml push 触发收窄为
   `build/patches/**`+`build/configs/**`——**教训：push 到 `build/**`（含 workflow 文件自身）
@@ -138,6 +142,16 @@
   结构性修复 6ee1e7e 随 47ba394 一并推送（改动 build.yml 自身 → 必触发）→ 新 run
   31964412187（18:22）取代之。**修复现已远端生效**（后续 tools/docs 推送不再触发构建）。
   当前 run 31964412187 双 job 已达 feeds 阶段（冷构建 ETA ~21:30 UTC）。
+- **2026-08-17 · 目标轮 7**：dts 引用标号全部在 dtsi 存在（预检通过，编译面无忧）；
+  写 `tools/ci/ci-status.sh`（跨会话速查，实测正常）；本线 eht320 等无新变化。
+- **2026-08-17 · 目标轮 8（用户在场联动）**：D0-4 用户完成 → 密钥验证 ✅ → **发现本线无
+  opkg（YYH 新快照=apk 系）**：撤误加 opkg 源、改 apk customfeeds 装 **bash 5.3.15**
+  （D0-5 ✅）→ collect.sh 首个全量 real 采集：**修两个真 bug**（ssh 缺 -n 吸干 parse_spec
+  stdin 致每模块只出一行 → 13/53；mt76 band `^Band` 锚点不匹配 tab 行首）→ 终版
+  **OK=28/NA=15/43** 入库 `docs/metrics/runs/metrics-20260816-XR1710G-01-on-1.tsv`
+  （NA=本线观测面缺口：无 FlowSense/luci-npu 面板/debugfs wed/governor 非 performance 等，
+  供 M2 对照）→ 18:37 调度 cron 触发 sync-detect，空档误判 changed → dispatch
+  run 31965156465（live，make 中）；run 31964412187 被调度竞争取消（优化项已记）。
 
 ## 7. 入库存档红线
 
