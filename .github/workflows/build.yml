@@ -30,6 +30,10 @@ name: build
 # 2026.07 等演化面）→ 新文件整文件覆盖 + per-file 补丁逐个应用，冲突产物归档，
 # job 失败不静默。PR 合入后：本文件注释位扩展为 sync-openwrt-main job
 # （ADR-0001 完全自主分支：每日自动合入 upstream main + mt76/hostapd）。
+#
+# 已知约束：job 级 if 只能使用 github/inputs/needs/vars 上下文（matrix 不可用），
+# 故 build 拆为 build-w1700k / build-xr1710g 两个独立 job，各自以固定 if 过滤
+# workflow_dispatch 输入；push/schedule 时两 job 全跑。
 # ============================================================================
 
 on:
@@ -163,32 +167,18 @@ jobs:
           echo "已 dispatch build.yml（profile=all）"
 
   # ==========================================================================
-  # J1 · build —— 矩阵构建（airoha/an7581 × 2 profile）
-  #   gemtek_w1700k-ubi : PR 合入前占位——直接用仓库内快照 config（存在）
-  #   gemtek_xr1710g-ubi: CI 现场种子自举生成 config（仓库不存 xr1710g config）
+  # J1 · build-w1700k —— 占位档（PR #22397 合入前绿灯 canary，main 原生 profile）
+  #   直接使用仓库内快照 config（build/configs/an7581-gemtek-w1700k.config）
   # ==========================================================================
-  build:
-    name: build-${{ matrix.profile }} (${{ matrix.target }}/${{ matrix.subtarget }})
+  build-w1700k:
+    name: build-w1700k (airoha/an7581, snapshot)
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     concurrency:
-      group: build-${{ matrix.profile }}
+      group: build-gemtek_w1700k-ubi
       cancel-in-progress: true
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - profile: gemtek_w1700k-ubi
-            target: airoha
-            subtarget: an7581
-            config_mode: snapshot   # PR 合入前占位：build/configs/ 快照直接可用
-          - profile: gemtek_xr1710g-ubi
-            target: airoha
-            subtarget: an7581
-            config_mode: seed       # 种子自举：应用 device-layer → defconfig 现场生成
-    # workflow_dispatch 指定单 profile 时只跑对应的档；push/schedule 全跑
-    # 注意：${{ 必须与表达式同行连续（YAML 折叠标量会拆散它 → workflow 解析失败）
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.profile == 'all' || (inputs.profile == 'xr1710g-ubi' && matrix.profile == 'gemtek_xr1710g-ubi') || (inputs.profile == 'w1700k-ubi' && matrix.profile == 'gemtek_w1700k-ubi') }}
+    # dispatch 单档过滤；push/schedule 全跑（job 级 if 不得使用 matrix 上下文）
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.profile == 'all' || inputs.profile == 'w1700k-ubi' }}
     steps:
       - name: Checkout 本仓库（补丁/配置来源）
         uses: actions/checkout@v4
@@ -228,10 +218,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: openwrt-src/dl
-          key: cache-${{ github.ref_name }}-dl-${{ matrix.target }}-${{ matrix.profile }}-${{ steps.date.outputs.today }}
+          key: cache-${{ github.ref_name }}-dl-airoha-gemtek_w1700k-ubi-${{ steps.date.outputs.today }}
           restore-keys: |
-            cache-${{ github.ref_name }}-dl-${{ matrix.target }}-${{ matrix.profile }}-
-            cache-${{ github.ref_name }}-dl-${{ matrix.target }}-
+            cache-${{ github.ref_name }}-dl-airoha-gemtek_w1700k-ubi-
+            cache-${{ github.ref_name }}-dl-airoha-
             cache-${{ github.ref_name }}-dl-
 
       - name: 恢复工具链缓存（toolchain-* + host + hostpkg；F8：按 target/subtarget 固定）
@@ -242,10 +232,10 @@ jobs:
             openwrt-src/staging_dir/toolchain-*
             openwrt-src/staging_dir/host
             openwrt-src/staging_dir/hostpkg
-          key: cache-${{ github.ref_name }}-toolchain-${{ matrix.target }}-${{ matrix.subtarget }}-${{ steps.tcstamp.outputs.h }}
+          key: cache-${{ github.ref_name }}-toolchain-airoha-an7581-${{ steps.tcstamp.outputs.h }}
           restore-keys: |
-            cache-${{ github.ref_name }}-toolchain-${{ matrix.target }}-${{ matrix.subtarget }}-
-            cache-${{ github.ref_name }}-toolchain-${{ matrix.target }}-
+            cache-${{ github.ref_name }}-toolchain-airoha-an7581-
+            cache-${{ github.ref_name }}-toolchain-airoha-
 
       # build_dir/target 默认不缓存：标准 runner 磁盘 14G，全量 build_dir 9.5G+，
       # 缓存叠加必爆盘；仅 input.enable_buildcache=true 且大磁盘 runner 时启用
@@ -255,9 +245,179 @@ jobs:
         uses: actions/cache@v4
         with:
           path: openwrt-src/build_dir/target-*
-          key: cache-${{ github.ref_name }}-build-${{ matrix.target }}-${{ matrix.subtarget }}-${{ github.sha }}
+          key: cache-${{ github.ref_name }}-build-airoha-an7581-${{ github.sha }}
           restore-keys: |
-            cache-${{ github.ref_name }}-build-${{ matrix.target }}-${{ matrix.subtarget }}-
+            cache-${{ github.ref_name }}-build-airoha-an7581-
+
+      - name: feeds update + install
+        run: |
+          cd "$GITHUB_WORKSPACE/openwrt-src"
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: 生成/使用目标配置（快照模式；F7：严禁 sed 改 choice）
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE/xr1710g"
+          cd "$GITHUB_WORKSPACE/openwrt-src"
+          # 权威种子 = 仓库内 w1700k 快照（target=airoha/an7581 整块一致，defconfig
+          # 才能落到 airoha 目标；空 .config 只会给默认 target——F7 教训）。
+          # 严禁对 TARGET choice 行做 sed：会留下互相冲突的多个 *_TARGET=y。
+          cp "$ROOT/build/configs/an7581-gemtek-w1700k.config" .config
+          make defconfig
+          grep -q '^CONFIG_TARGET_airoha_an7581_DEVICE_gemtek_w1700k-ubi=y' .config \
+            || { echo "::error::w1700k 占位 profile 未出现在 defconfig 结果"; exit 1; }
+          grep -q '^CONFIG_TARGET_airoha=y' .config \
+            || { echo "::error::target 回落/choice 冲突（F7）——.config 校验失败"; exit 1; }
+          echo "快照模式 OK：gemtek_w1700k-ubi 已激活（占位）"
+
+      - name: 构建固件（make -j$(nproc) V=s；日志尾部 tee，失败完整归档）
+        shell: bash
+        run: |
+          cd "$GITHUB_WORKSPACE/openwrt-src"
+          set +e
+          make -j"$(nproc)" V=s 2>&1 | tee build.log | tail -n 80
+          rc=${PIPESTATUS[0]}
+          set -e
+          echo "make rc=$rc（步骤耗时约 $((SECONDS / 60)) 分钟）"
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::make 失败 rc=$rc；完整日志 build.log（见上传 artifact，含失败 tail）"
+            exit "$rc"
+          fi
+
+      - name: 导出构建用 config（GPL 归档，现场生成非仓库内文件）
+        shell: bash
+        run: |
+          cd "$GITHUB_WORKSPACE/openwrt-src"
+          mkdir -p bin/targets/airoha/an7581
+          cp .config "bin/targets/airoha/an7581/openwrt-airoha-an7581-gemtek_w1700k-ubi.config"
+
+      - name: 校验固件产物（三件套 + sha256sums + buildinfo）
+        shell: bash
+        run: |
+          cd "$GITHUB_WORKSPACE/openwrt-src/bin/targets/airoha/an7581" \
+            || { echo "::error::bin/targets/airoha/an7581 目录缺失"; exit 1; }
+          ls -la | head -40
+          # 命名随 main 演化（PR 时期 -sysupgrade.itb，当前 main 为
+          # -squashfs-sysupgrade.itb）→ 按通配类别校验，不以精确名耦合
+          for cat in 'sysupgrade' 'initramfs-recovery' 'chainload-uboot'; do
+            hit=$(ls openwrt-airoha-an7581-gemtek_w1700k-ubi-*${cat}*.itb 2>/dev/null || true)
+            [ -n "$hit" ] || { echo "::error::缺少 ${cat} 类别固件产物"; exit 1; }
+            echo "$cat → $hit"
+          done
+          [ -s sha256sums ]         || { echo "::error::缺少 sha256sums"; exit 1; }
+          [ -s config.buildinfo ]   || { echo "::error::缺少 config.buildinfo（GPL）"; exit 1; }
+          [ -s feeds.buildinfo ]    || { echo "::error::缺少 feeds.buildinfo"; exit 1; }
+          [ -s version.buildinfo ]  || { echo "::error::缺少 version.buildinfo"; exit 1; }
+          echo "固件产物校验通过"
+
+      - name: 上传固件产物
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-gemtek_w1700k-ubi-${{ github.run_id }}
+          path: |
+            openwrt-src/bin/targets/airoha/an7581/openwrt-airoha-an7581-gemtek_w1700k-ubi-*.itb
+            openwrt-src/bin/targets/airoha/an7581/openwrt-airoha-an7581-gemtek_w1700k-ubi.config
+            openwrt-src/bin/targets/airoha/an7581/sha256sums
+            openwrt-src/bin/targets/airoha/an7581/config.buildinfo
+            openwrt-src/bin/targets/airoha/an7581/feeds.buildinfo
+            openwrt-src/bin/targets/airoha/an7581/version.buildinfo
+          if-no-files-found: error
+
+      - name: 上传构建日志 / 补丁冲突归档
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-gemtek_w1700k-ubi-${{ github.run_id }}
+          path: |
+            openwrt-src/build.log
+            openwrt-src/conflict-archive/
+          if-no-files-found: warn
+
+  # ==========================================================================
+  # J2 · build-xr1710g —— 种子自举档（PR #22397 未合入期按设计可能标红）
+  #   xr1710g profile 由 device-layer 补丁注册；config 由 CI 现场种子自举生成
+  #   （仓库不维护 xr1710g config 静态快照）。补丁冲突 → 双路径 + 归档 + 不静默。
+  # ==========================================================================
+  build-xr1710g:
+    name: build-xr1710g (airoha/an7581, seed)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    concurrency:
+      group: build-gemtek_xr1710g-ubi
+      cancel-in-progress: true
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.profile == 'all' || inputs.profile == 'xr1710g-ubi' }}
+    steps:
+      - name: Checkout 本仓库（补丁/配置来源）
+        uses: actions/checkout@v4
+        with:
+          path: xr1710g
+
+      - name: 日期指纹（dl 缓存 key 每日换代 → 每夜档即是生存线）
+        id: date
+        run: echo "today=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - name: 计算工具链指纹（stamp 内容 sha256 → 换代）
+        id: tcstamp
+        run: |
+          set -euo pipefail
+          # 全新 runner 尚无 staging_dir → 指纹为空（sha256 空输入 = e3b0c44298fc），
+          # 形成确定性稳定 key；restore-keys 按 target/subtarget 逐级降级。
+          # stamp 指纹在（自托管/复用 runner 等）残留 toolchain 状态下自动换代。
+          h=''
+          if [ -d openwrt-src/staging_dir ]; then
+            h=$(cd openwrt-src/staging_dir && find toolchain-*/stamp -type f -print0 2>/dev/null | sort -z | xargs -0 cat 2>/dev/null | sha256sum | cut -c1-12)
+          fi
+          echo "h=${h:-none}" >> "$GITHUB_OUTPUT"
+          echo "toolchain fingerprint: ${h:-none}"
+
+      - name: 安装宿主依赖（F3/F4/F9：ncurses/gawk/rsync/unzip/distutils→setuptools；含 python3-dev/swig 供 uboot-airoha 预检）
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib \
+            gettext git libncurses5-dev libssl-dev python3 python3-dev python3-setuptools \
+            rsync swig unzip zlib1g-dev
+
+      - name: 克隆 OpenWrt main（浅克隆 + blob:none，F1/F2：工作树完整）
+        run: git clone --depth=1 --filter=blob:none https://github.com/openwrt/openwrt.git openwrt-src
+
+      - name: 恢复 dl 缓存（key 含日期 → 每日新档；restore 逐级降级）
+        id: dl-cache
+        uses: actions/cache@v4
+        with:
+          path: openwrt-src/dl
+          key: cache-${{ github.ref_name }}-dl-airoha-gemtek_xr1710g-ubi-${{ steps.date.outputs.today }}
+          restore-keys: |
+            cache-${{ github.ref_name }}-dl-airoha-gemtek_xr1710g-ubi-
+            cache-${{ github.ref_name }}-dl-airoha-
+            cache-${{ github.ref_name }}-dl-
+
+      - name: 恢复工具链缓存（toolchain-* + host + hostpkg；F8：按 target/subtarget 固定）
+        id: toolchain-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            openwrt-src/staging_dir/toolchain-*
+            openwrt-src/staging_dir/host
+            openwrt-src/staging_dir/hostpkg
+          key: cache-${{ github.ref_name }}-toolchain-airoha-an7581-${{ steps.tcstamp.outputs.h }}
+          restore-keys: |
+            cache-${{ github.ref_name }}-toolchain-airoha-an7581-
+            cache-${{ github.ref_name }}-toolchain-airoha-
+
+      # build_dir/target 默认不缓存：标准 runner 磁盘 14G，全量 build_dir 9.5G+，
+      # 缓存叠加必爆盘；仅 input.enable_buildcache=true 且大磁盘 runner 时启用
+      #（key 含 github.sha → 每次提交独立缓存线，避免跨提交污染）。
+      - name: 恢复 build_dir/target 缓存（默认禁用）
+        if: inputs.enable_buildcache == 'true'
+        uses: actions/cache@v4
+        with:
+          path: openwrt-src/build_dir/target-*
+          key: cache-${{ github.ref_name }}-build-airoha-an7581-${{ github.sha }}
+          restore-keys: |
+            cache-${{ github.ref_name }}-build-airoha-an7581-
 
       - name: feeds update + install
         run: |
@@ -266,10 +426,8 @@ jobs:
           ./scripts/feeds install -a
 
       # device-layer 仅 xr1710g（seed）档需要：xr1710g profile 由补丁注册。
-      # w1700k（snapshot）档 = main 原生 profile，不应用补丁（现网 main 即可
-      # 直接构建 w1700k，作管线绿灯 canary；PR 合入后两档走同一条补丁路径）。
-      - name: 应用设备适配层补丁（双路径：整 diff → 冲突时新文件覆盖 + per-file，仅 seed 档）
-        if: matrix.config_mode == 'seed'
+      # 补丁双路径：整 diff → 冲突时新文件覆盖 + per-file 逐个应用，失败归档不静默。
+      - name: 应用设备适配层补丁（双路径：整 diff → 冲突时新文件覆盖 + per-file）
         shell: bash
         run: |
           set -euo pipefail
@@ -320,7 +478,7 @@ jobs:
           grep -q 'gemtek_xr1710g-ubi' target/linux/airoha/image/an7581.mk
           echo "device-layer 冒烟校验通过"
 
-      - name: 生成/使用目标配置（快照 or 种子自举；F7：严禁 sed 改 choice）
+      - name: 生成目标配置（种子自举；F7：严禁 sed 改 choice）
         shell: bash
         run: |
           set -euo pipefail
@@ -330,14 +488,13 @@ jobs:
           # 才能落到 airoha 目标；空 .config 只会给默认 target——F7 教训）。
           # 严禁对 TARGET choice 行做 sed：会留下互相冲突的多个 *_TARGET=y。
           cp "$ROOT/build/configs/an7581-gemtek-w1700k.config" .config
-          if [ "${{ matrix.config_mode }}" = 'seed' ]; then
-            # 种子自举（xr1710g-ubi）：只切换 DEVICE_* 器件符号（独立 bool，非
-            # choice 成员）。scripts/config 在现网 main 已是 kconfig 源码目录，
-            # 故直接用 python 做**整行对**变换（等号行↔not-set 行同时改写，
-            # 不遗留一半状态），随后 defconfig 归一化 = F7 正解（空/整块种子 +
-            # defconfig，严禁对 choice 行做部分 sed）。xr1710g profile 由
-            # device-layer 补丁注册，defconfig 自动出现。
-            python3 - <<'EOF'
+          # 种子自举（xr1710g-ubi）：只切换 DEVICE_* 器件符号（独立 bool，非
+          # choice 成员）。scripts/config 在现网 main 已是 kconfig 源码目录，
+          # 故直接用 python 做**整行对**变换（等号行↔not-set 行同时改写，
+          # 不遗留一半状态），随后 defconfig 归一化 = F7 正解（空/整块种子 +
+          # defconfig，严禁对 choice 行做部分 sed）。xr1710g profile 由
+          # device-layer 补丁注册，defconfig 自动出现。
+          python3 - <<'EOF'
           import re
           p = '.config'
           s = open(p, encoding='utf-8').read()
@@ -353,23 +510,17 @@ jobs:
           open(p, 'w', encoding='utf-8').write(s)
           print('种子器件切换完成（w1700k→xr1710g）')
           EOF
-            make defconfig
-            grep -q '^CONFIG_TARGET_airoha_an7581_DEVICE_gemtek_xr1710g-ubi=y' .config \
-              || { echo "::error::种子自举失败：xr1710g profile 未出现在 defconfig 结果"; exit 1; }
-            # 器件选定 → 其 u-boot 变体作为 DEFAULT 包自动进入构建
-            #（实测 main 生成 PACKAGE_u-boot-an7581_gemtek_w1700k=y）→
-            # an7581-chainloader 在 image 阶段产出 chainload-uboot.itb。
-            grep -q '^CONFIG_PACKAGE_u-boot-an7581_gemtek_xr1710g=y' .config \
-              || echo "::warning::u-boot 变体未自动启用——chainload-uboot.itb 可能缺失"
-            echo "种子自举 OK：gemtek_xr1710g-ubi 已激活（.config 现场生成）"
-          else
-            make defconfig
-            grep -q '^CONFIG_TARGET_airoha_an7581_DEVICE_gemtek_w1700k-ubi=y' .config \
-              || { echo "::error::w1700k 占位 profile 未出现在 defconfig 结果"; exit 1; }
-            echo "快照模式 OK：gemtek_w1700k-ubi 已激活（占位）"
-          fi
+          make defconfig
+          grep -q '^CONFIG_TARGET_airoha_an7581_DEVICE_gemtek_xr1710g-ubi=y' .config \
+            || { echo "::error::种子自举失败：xr1710g profile 未出现在 defconfig 结果"; exit 1; }
+          # 器件选定 → 其 u-boot 变体作为 DEFAULT 包自动进入构建
+          #（实测 main 生成 PACKAGE_u-boot-an7581_gemtek_w1700k=y）→
+          # an7581-chainloader 在 image 阶段产出 chainload-uboot.itb。
+          grep -q '^CONFIG_PACKAGE_u-boot-an7581_gemtek_xr1710g=y' .config \
+            || echo "::warning::u-boot 变体未自动启用——chainload-uboot.itb 可能缺失"
           grep -q '^CONFIG_TARGET_airoha=y' .config \
             || { echo "::error::target 回落/choice 冲突（F7）——.config 校验失败"; exit 1; }
+          echo "种子自举 OK：gemtek_xr1710g-ubi 已激活（.config 现场生成）"
 
       - name: 构建固件（make -j$(nproc) V=s；日志尾部 tee，失败完整归档）
         shell: bash
@@ -390,7 +541,7 @@ jobs:
         run: |
           cd "$GITHUB_WORKSPACE/openwrt-src"
           mkdir -p bin/targets/airoha/an7581
-          cp .config "bin/targets/airoha/an7581/openwrt-airoha-an7581-gemtek_${{ matrix.profile }}.config"
+          cp .config "bin/targets/airoha/an7581/openwrt-airoha-an7581-gemtek_xr1710g-ubi.config"
 
       - name: 校验固件产物（三件套 + sha256sums + buildinfo）
         shell: bash
@@ -401,7 +552,7 @@ jobs:
           # 命名随 main 演化（PR 时期 -sysupgrade.itb，当前 main 为
           # -squashfs-sysupgrade.itb）→ 按通配类别校验，不以精确名耦合
           for cat in 'sysupgrade' 'initramfs-recovery' 'chainload-uboot'; do
-            hit=$(ls openwrt-airoha-an7581-gemtek_${{ matrix.profile }}-*${cat}*.itb 2>/dev/null || true)
+            hit=$(ls openwrt-airoha-an7581-gemtek_xr1710g-ubi-*${cat}*.itb 2>/dev/null || true)
             [ -n "$hit" ] || { echo "::error::缺少 ${cat} 类别固件产物"; exit 1; }
             echo "$cat → $hit"
           done
@@ -415,10 +566,10 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.profile }}-${{ github.run_id }}
+          name: firmware-gemtek_xr1710g-ubi-${{ github.run_id }}
           path: |
-            openwrt-src/bin/targets/airoha/an7581/openwrt-airoha-an7581-gemtek_${{ matrix.profile }}-*.itb
-            openwrt-src/bin/targets/airoha/an7581/openwrt-airoha-an7581-gemtek_${{ matrix.profile }}.config
+            openwrt-src/bin/targets/airoha/an7581/openwrt-airoha-an7581-gemtek_xr1710g-ubi-*.itb
+            openwrt-src/bin/targets/airoha/an7581/openwrt-airoha-an7581-gemtek_xr1710g-ubi.config
             openwrt-src/bin/targets/airoha/an7581/sha256sums
             openwrt-src/bin/targets/airoha/an7581/config.buildinfo
             openwrt-src/bin/targets/airoha/an7581/feeds.buildinfo
@@ -429,7 +580,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log-${{ matrix.profile }}-${{ github.run_id }}
+          name: build-log-gemtek_xr1710g-ubi-${{ github.run_id }}
           path: |
             openwrt-src/build.log
             openwrt-src/conflict-archive/
