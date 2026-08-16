@@ -16,12 +16,17 @@ AUTH="Authorization: Bearer $TOKEN"
 
 RUNID="${1:-}"
 if [ -z "$RUNID" ]; then
-  RUNID="$(curl -s -H "$AUTH" "https://api.github.com/repos/$REPO/actions/runs?per_page=5" \
+  RUNID="$(curl -s -H "$AUTH" "https://api.github.com/repos/$REPO/actions/runs?per_page=6" \
     | python3 -c "
 import json,sys
-for r in json.load(sys.stdin).get('workflow_runs',[]):
-    if r['name']=='build' and r['event']=='push':
+rs=json.load(sys.stdin).get('workflow_runs',[])
+for r in rs:  # 优先最新正在跑的 build run（任意事件，含 workflow_dispatch）
+    if r['name']=='build' and r['status']=='in_progress':
         print(r['id']); break
+else:
+    for r in rs:
+        if r['name']=='build':
+            print(r['id']); break
 ")"
 fi
 [ -n "$RUNID" ] || { echo "未找到 build run" >&2; exit 2; }
