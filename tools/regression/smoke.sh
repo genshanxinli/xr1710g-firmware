@@ -83,9 +83,9 @@ if echo "$brlan" | grep -q "192.168.123.1/24" && [ "$ethup" -ge 2 ]; then
 else emit WARN "3.接口状态" "br-lan=$brlan | up 口数=$ethup"; fi
 
 # --- 4 无线 band ---------------------------------------------------------------
-bands="$(rf "iw phy phy0 info 2>/dev/null | grep -E '^[[:space:]]+Band [0-9]+:' | tr -d ' ' | tr '\n' ',' ")"
+bands="$(rf "iw phy phy0 info 2>/dev/null | grep -oE 'Band [0-9]+:' | tr '\n' ',' ")"
 sixg="$(rf "uci get wireless.radio2.disabled 2>/dev/null")"
-if echo "$bands" | grep -q "Band 1" && echo "$bands" | grep -q "Band 2"; then
+if echo "$bands" | grep -q "Band 1:" && echo "$bands" | grep -q "Band 2:"; then
   # 6GHz：radio2 disabled 为已知态（信道未枚举）；自建镜像需 enable radio2 后另行验证
   emit PASS "4.无线 band" "phy0 $bands（6GHz: radio2 disabled=${sixg:-未知},信道未枚举=已知态）"
 else emit WARN "4.无线 band" "phy0 bands=$bands"; fi
