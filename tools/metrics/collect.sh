@@ -90,7 +90,9 @@ run_cmd() {
   local cmd="$1" enc
   if [ "$RUN_LOCATION" = remote ]; then
     enc="$(printf '%s' "$cmd" | base64 2>/dev/null | tr -d '\n')"
-    ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" "echo \"$enc\" | base64 -d | bash" 2>/dev/null
+    # -n 必须：否则 ssh 继承并吸干调用方（parse_spec 的 while read <<< spec）
+    # 的 stdin，导致 spec 只剩第一组（2026-08-17 实测）。
+    ssh -n -o BatchMode=yes -o ConnectTimeout=10 "$HOST" "echo \"$enc\" | base64 -d | bash" 2>/dev/null
   else
     eval "$cmd" 2>/dev/null
   fi
@@ -409,7 +411,7 @@ probe_mt76() {
     pn="$(basename "$phy")"
     # 远端/本地路径统一：phy 绝对路径在远端意义不同，per-phy 命令一律用 phy 名
     run_one mt76 "mt76.${pn}.band" \
-      "iw phy ${pn} info 2>/dev/null | grep -E '^Band '" \
+      "iw phy ${pn} info 2>/dev/null | grep -E 'Band [0-9]+:'" \
       "iw 可见 Band 1/2/3 齐备 [来源: 02 §0]" "Band"
     if [ -z "$(run_cmd "command -v iw 2>/dev/null")" ]; then
       emit_line mt76 "mt76.${pn}.is_6ghz" "6GHz radio 正确标记 [来源: 02 §2]" "(iw 缺失，无法判定频段)" NA "iw phy ${pn} info"
@@ -529,9 +531,9 @@ main() {
   if [ "$FORCE_DRY" = 1 ]; then
     MODE=dryrun
   elif [ -n "$HOST" ]; then
-    if ssh -o BatchMode=yes -o ConnectTimeout=5 "$HOST" true 2>/dev/null; then
+    if ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$HOST" true 2>/dev/null; then
       MODE=real; RUN_LOCATION=remote
-      DEVICE_TAG="$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$HOST" \
+      DEVICE_TAG="$(ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$HOST" \
         'cat /proc/device-tree/model 2>/dev/null | tr -d "\0"; uname -m' 2>/dev/null | tr '\n' ' ')"
     else
       echo "[warn] --host $HOST ssh 不可达（BatchMode=yes / ConnectTimeout=5），回落 dry-run。" >&2
