@@ -1,0 +1,4 @@
+diff --git a/package/boot/uboot-airoha/patches/999-airoha-add-gemtek-w1700k.patch b/package/boot/uboot-airoha/patches/998-airoha-add-gemtek-w1700k.patch
+similarity index 100%
+rename from package/boot/uboot-airoha/patches/999-airoha-add-gemtek-w1700k.patch
+rename to package/boot/uboot-airoha/patches/998-airoha-add-gemtek-w1700k.patch

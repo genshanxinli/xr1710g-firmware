@@ -27,13 +27,17 @@ Gemtek XR1710G（Airoha AN7581GT + MT7996 Wi-Fi 7 / BE19000 / 双万兆）正处
   - [05 · 盯梢清单（情报源）](./research/05-watchlist.md)
 - **术语表**：[CONTEXT.md](../CONTEXT.md)
 - **架构决策**：[ADR-0001 完全自主分支+事件驱动发布](./adr/0001-distro-strategy.md) · [ADR-0002 设备能力全集边界](./adr/0002-device-capability-boundary.md)
+- **M1 开工交付物（2026-08-16）**
+  - 自动跟进循环骨架：[抓取脚本](../scripts/tracking/fetch.sh) · [CI workflow](../.github/workflows/tracking.yml) · [盯梢报告样例](./tracking/2026-08-16.md)
+  - 救砖体系：[救砖 SOP](./sop/brick-recovery.md) · [互刷边界实验模板](./sop/mutual-flash-experiment-template.md)
+  - NPU 指标盘点 v0：[采集脚本](../tools/metrics/collect.sh) · [清单 v0](./metrics/v0.md) · [回填模板](./metrics/backfill-template.md)
 
-## 下一步（M0 启动清单）
+## 下一步（M0 启动清单 · 进度）
 
-1. 购机：2 台 Gemtek XR1710G（¥350–400/台，闲鱼搜 "w1700k"）
-2. 建仓：GitHub 公开仓库（GPL-2.0-or-later），本目录 docs/ 移入
-3. AI 管线骨架：每日同步循环（git.openwrt.org + mt76 抓取）、事件触发构建
-4. 原厂固件/分区备份 + 救砖 SOP + NPU 指标盘点 v0（人类：拆机/UART/刷机）
+1. 购机：2 台 Gemtek XR1710G（¥350–400/台，闲鱼搜 "w1700k"）—— ✅ 真机已在手（2026-08-16）
+2. 建仓：GitHub 公开仓库（GPL-2.0-or-later），本目录 docs/ 移入—— ✅ 已建 genshanxinli/xr1710g-firmware（2026-08-16）
+3. AI 管线骨架：每日同步循环（git.openwrt.org + mt76 抓取）、事件触发构建—— 🚧 骨架产出中（scripts/tracking/ + .github/workflows/）
+4. 原厂固件/分区备份 + 救砖 SOP + NPU 指标盘点 v0（人类：拆机/UART/刷机）—— 🚧 SOP 草稿与指标盘点 v0 产出中（docs/sop/、tools/metrics/）
 
 ## 路线图一句话
 

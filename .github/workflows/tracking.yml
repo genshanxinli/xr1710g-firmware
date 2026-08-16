@@ -1,0 +1,55 @@
+name: tracking
+
+# ============================================================================
+# XR1710G 自动跟进循环（M4）· 每周抓取 → 报告 → 提交
+#
+# 限流约定（维护者必读）：
+# - GitHub API 未认证限额 60 次/时（按出口 IP 计）。本 workflow 每次运行恰用 4 次：
+#     /commits?path=target/linux/airoha（源#4）、/commits?path=mt7996（源#5）、
+#     /pulls/22397、/torvalds/linux commits?path=arch/arm64/boot/dts/airoha
+#   每周 1 次 + 手动触发，远低于配额；撞 403 时 fetch.sh 记 SKIP 并在 99_STATUS.tsv
+#   写明原因，job 不假失败、不重试轰炸（curl 无 --retry）。
+# - 论坛 search.json ⩽1 次/分（否则 429）：本 workflow 不抓论坛；论坛帖
+#   #222776/#247242/#252504 与恩山帖子留人工/通知驱动（05-watchlist #7/#8/#9/#12）。
+# - 恩山需登录：人工每周回填。
+# ============================================================================
+
+on:
+  schedule:
+    - cron: '15 3 * * 1'   # 每周一 03:15 UTC（周报节奏；抓取窗口覆盖近 14 天）
+  workflow_dispatch: {}    # 手动触发（补抓 / 失败重跑 / 上线立即跑一期）
+
+permissions:
+  contents: write          # 允许 git commit + push docs/tracking/
+
+concurrency:
+  group: xr1710g-tracking
+  cancel-in-progress: false   # 防重入：上一 run 未结束时新 run 排队等待，不互踩
+
+jobs:
+  tracking:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 抓取原始数据（docs/tracking/<date>.raw/）
+        run: bash scripts/tracking/fetch.sh
+
+      - name: 汇总跟踪报告（docs/tracking/<date>.md）
+        run: python3 scripts/tracking/report.py
+
+      - name: Commit + push 报告与原始数据
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name  "xr1710g-tracking-bot"
+          git config user.email "xr1710g-tracking-bot@users.noreply.github.com"
+          git add docs/tracking/
+          if git diff --cached --quiet; then
+            echo "今日报告/原始数据无变化（同日重跑只覆盖同名文件），跳过 commit"
+          else
+            git commit -m "docs(tracking): 上游跟踪报告 $(date -u +%F)"
+            git push
+          fi

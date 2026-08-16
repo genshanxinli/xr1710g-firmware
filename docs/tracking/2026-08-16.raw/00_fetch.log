@@ -1,0 +1,15 @@
+07:35:57Z  banner date=2026-08-16 window=2026-08-02..2026-08-16 clone_until=2026-07-17
+fatal: unable to access 'https://git.openwrt.org/openwrt/openwrt.git/': gnutls_handshake() failed: The TLS connection was non-properly terminated.
+07:36:07Z  SKIP 01   git ls-remote 失败（网络/超时）
+Cloning into '/tmp/tmp.cXhMOhZKyM/owrt'...
+fatal: unable to access 'https://git.openwrt.org/openwrt/openwrt.git/': gnutls_handshake() failed: The TLS connection was non-properly terminated.
+07:36:17Z  SKIP 03   浅克隆失败 exit=128（网络/超时），SKIP 保留不重试
+07:36:18Z  OK   04
+07:36:19Z  OK   05
+07:36:19Z  OK   07
+07:36:20Z  OK   16
+07:36:27Z  OK   06
+07:36:27Z  OK   14
+07:36:28Z  OK   14b
+07:36:28Z  OK   15
+07:36:28Z  done ok=8 skipped=2

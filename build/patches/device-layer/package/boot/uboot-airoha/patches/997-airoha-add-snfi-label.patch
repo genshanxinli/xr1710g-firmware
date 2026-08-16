@@ -1,0 +1,4 @@
+diff --git a/package/boot/uboot-airoha/patches/998-airoha-add-snfi-label.patch b/package/boot/uboot-airoha/patches/997-airoha-add-snfi-label.patch
+similarity index 100%
+rename from package/boot/uboot-airoha/patches/998-airoha-add-snfi-label.patch
+rename to package/boot/uboot-airoha/patches/997-airoha-add-snfi-label.patch

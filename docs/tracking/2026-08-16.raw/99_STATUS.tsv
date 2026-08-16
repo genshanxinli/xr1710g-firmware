@@ -1,0 +1,10 @@
+01	SKIP	git ls-remote TLS 握手失败（gnutls_handshake terminated；git.openwrt.org root=502，cgit 页 200）——本环境 git 端点不可用
+03	SKIP	浅克隆 TLS 握手失败（同上，git 端点 502/TLS 终止）；cgit 路径页可达（watchlist #1 备选）
+04	OK	-
+05	OK	-
+06	OK	-
+07	OK	-
+14	OK	-
+14b	OK	-
+15	OK	-
+16	OK	-

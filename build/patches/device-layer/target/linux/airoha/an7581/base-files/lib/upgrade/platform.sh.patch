@@ -1,0 +1,14 @@
+diff --git a/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh b/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh
+index 767f499faad1a9..e7cde071e1bf92 100644
+--- a/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh
++++ b/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh
+@@ -5,7 +5,8 @@ platform_do_upgrade() {
+ 	local board=$(board_name)
+ 
+ 	case "$board" in
+-		gemtek,w1700k-ubi)
++		gemtek,w1700k-ubi|\
++		gemtek,xr1710g-ubi)
+ 			fit_do_upgrade "$1"
+ 			;;
+ 		*)
