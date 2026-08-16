@@ -19,6 +19,13 @@
 **一句话**：M1 基线构建需要 **≥4GiB RAM + ≥30GiB 磁盘 + ≥4 核（或 CI runner）**，
 本探路机在磁盘扩容后具备续跑条件，但 35 分钟时间盒不足以跑完全量（见 06 报告续跑段）。
 
+**CI 标准 runner 口径**（本 README 修订版）：M1 构建**主路径 = GitHub Actions CI**
+（`.github/workflows/build.yml`，见 §3.4）。`ubuntu-24.04` 标准 runner = **4 vCPU /
+16G RAM / 14G SSD**；全新构建约 **1.5–2.5h**，dl + 工具链缓存命中约 **1–1.5h**。
+`docs/research/06-build-recon.md` 早期"16 核 / 40–70min"为**过时口径**（旧型 runner
+假设、且未计入全量 world 与 image 阶段），排期勿以之为据。本机/探路机仅作**对照验证**
+（无 root、缺宿主依赖的场景复现），不再承担主交付。
+
 ## 2. 补丁两层目录约定（对照 CONTEXT.md）
 
 分叉内自研改动分两层，目录按**前缀命名**，一个补丁主题一个子目录：
@@ -52,9 +59,13 @@ build/patches/
 ### 3.1 前置
 
 ```bash
-# 官方依赖（Debian/Ubuntu 示例）
+# 官方依赖（Debian/Ubuntu 示例；CI runner 同款，见 .github/workflows/build.yml）
 sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib \
-  gettext git libncurses5-dev libssl-dev python3 python3-distutils rsync unzip zlib1g-dev
+  gettext git libncurses5-dev libssl-dev python3 python3-dev python3-setuptools \
+  rsync swig unzip zlib1g-dev
+# F9：Python ≥3.12 已移除 distutils；OpenWrt 预检/uboot-airoha 认 setuptools 提供的
+# distutils shim → 必须装 python3-setuptools（旧文档的 python3-distutils 仅存于 ≤3.11 系发行版）
+# 另含 python3-dev/swig：当前 main 的 uboot-airoha（UBOOT_USE_INTREE_DTC）有对应宿主预检。
 git clone --depth=1 --filter=blob:none https://git.openwrt.org/openwrt/openwrt.git openwrt-src
 cd openwrt-src
 ./scripts/feeds update -a && ./scripts/feeds install -a
@@ -69,6 +80,13 @@ git apply build/patches/device-layer/pr22397.diff
 make defconfig   # 之后 .config 出现 DEVICE_gemtek_xr1710g-ubi
 ```
 
+> **CI 已内置双路径**（`.github/workflows/build.yml`，实测 2026-08 的 main 上整 diff
+> 必冲突）：先 `git apply --check pr22397.diff`，失败 → 新文件整文件覆盖 + per-file
+> 补丁逐个应用，冲突产物归档 `conflict-archive/`、job **失败不静默**。本机上面的
+> 手工合并步骤只用于对照/调试，不作为主路径。
+> **xr1710g 档 config 由 CI 现场种子自举生成**（w1700k 快照为种子 → 器件符号整行
+> 对变换 → `make defconfig`，见 `configs/README.md`），仓库不提交 xr1710g config 文件。
+
 ### 3.3 配置与构建
 
 ```bash
@@ -80,13 +98,20 @@ make -j$(nproc)      # 小内存机用 -j2 并配 swap
 产物：`bin/targets/airoha/an7581/`（sysupgrade.itb / initramfs-recovery.itb /
 chainload-uboot.itb）。GPL 合规：本 build/ 全部（configs、patches、scripts）随分叉公开。
 
-### 3.4 CI 建议（事件驱动发布，见 04-roadmap M4）
+### 3.4 CI（M1 主路径，已落地 `.github/workflows/build.yml`）
 
-- runner：`ubuntu-24.04`（GitHub 免费 14G SSD / 16 核 / 7G RAM），单 subtarget 峰值约
-  10–15G（实测口径），可行；多 subtarget 拆分 job。
-- workflow：装依赖 → clone → feeds → 应用 device-layer → defconfig → `make -j` →
-  upload artifact；上游（PR #22397 / airoha / mt76）有动静即触发 + 每夜保底。
-- 探路期间踩过的坑（06 报告 §4 F1–F8）在 CI 上全部不存在（有 root、标准依赖、充足磁盘）。
+- runner：`ubuntu-24.04` 标准规格 **4 vCPU / 16G RAM / 14G SSD**；全新构建约
+  **1.5–2.5h**、dl+工具链缓存命中约 **1–1.5h**（06 报告早期"16 核 / 40–70min"为
+  过时口径）。`timeout-minutes: 240`。
+- workflow 职责：装依赖（F3/F4/F9，含 python3-setuptools）→ clone main
+  （blob:none，F1/F2）→ feeds → 应用 device-layer（**双路径**，冲突归档不静默）
+  → 快照/种子 defconfig（F7：严禁 sed 改 choice）→ `make -j` → 上传 artifact。
+  上游（PR #22397 / upstream main）有动静即触发（每 6h 轮询）+ 每夜 03:30 保底。
+- 缓存：dl / 工具链按 `cache-<branch>-` 前缀分 target 分档，每夜档即 7 天生存线；
+  `build_dir/target` 默认不缓存（14G 盘必爆），手动开启且大 runner 时可用。
+- 探路踩过的坑（06 报告 §4 F1–F9）在 CI 上多数不存在（有 root、标准依赖），但
+  **补丁冲突面（device-layer × 演进 main）仍在**——由双路径自动处理，处理不了就
+  归档 + 失败，交"完全自主分支"冲突流程（ADR-0001）消解，绝不静默产出错镜像。
 
 ## 4. 探路机可续跑点（2026-08-16 状态）
 

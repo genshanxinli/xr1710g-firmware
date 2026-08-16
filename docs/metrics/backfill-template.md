@@ -11,14 +11,14 @@
    - 本机（真机 root）：`bash /root/tools/metrics/collect.sh -o /root/metrics-<date>.tsv`
    - 远端（开发机）：`bash tools/metrics/collect.sh --host root@<IP> -o /root/metrics-<date>.tsv`
    - 真机上设备自检命中 → 自动进入 real 模式（逐指标 OK/NA）；确认文件头 `mode=real`。
-3. **对照采集（一键开关）**：NPU offload 关闭状态下再跑一遍全量（`-o metrics-<date>-off.tsv`），与第 2 步（开）构成「一键开关对照」双组。开关手段先固化：uci（flowsense/airoha-npu）+ debugfs 写 + 面板开关，三者任选并在采集记录中注明用了哪个。
+3. **对照采集（一键开关）**：NPU offload 关闭状态下再跑一遍全量（`-o metrics-<date>-off.tsv`），与第 2 步（开）构成「一键开关对照」双组。开关手段先固化：uci（flowsense/airoha-npu）+ debugfs 写 + 面板开关，三者任选并在采集记录中注明用了哪个。**关态对照必须包含 `iperf3.template.wifi10g`（10G↔Wi-Fi）位点**：词条③「与 mt76/社区特性共存无降级」需 on/off 双态同点位数据构成直接证据（开态吞吐不劣于关态），不能只靠开态 CPU<5% 的间接证据。
 4. **手动阶段（iperf3 不自动跑）**：按第 2 步产出文件中的 `iperf3.template.*` 预留参数逐条执行（换 `<IP>` 占位）：
    - 双 10G 双向近线速（`dual10g`）→ 记吞吐数值；
    - 10G↔Wi-Fi（`wifi10g`）→ 同时另开一个终端跑 `collect.sh --module cpu` 截 `cpu.top_snapshot`（CPU<5% 口径需要同刻数据）；
    - UDP 硬 NAT（`udp_nat`）→ 记吞吐与 `flowsense.flows` 命中；
    - 6GHz 802.11s 回程（`backhaul`）→ 记吞吐/时延 + `iw dev` mesh 状态 + `tx failed` 计数。
 5. **回填清单**：把 OK/NA 与关键实测值按 §3 记录表填写；按 §4 版本化规则决定是否 bump v1。
-6. **归档**：原始 .tsv/.json 采集文件与面板截图一起归档（建议 `docs/metrics/runs/`），清单引用文件名。
+6. **归档**：原始 .tsv/.json 采集文件与面板截图一起归档到 `docs/metrics/runs/`（命名/元信息/截图约定见 `runs/README.md`：`metrics-<YYYYMMDD>-<真机标识>-<on|off>-<序号>.tsv|json`；截图 `runs/screens/<前缀>-panel-<n>.png`；**`-o` 为追加模式，勿复用旧文件，新 run 一律新文件名**），清单引用文件名。
 
 ## 2. 字段说明（v0.md 五列）
 
@@ -30,7 +30,7 @@
 | 真机回填状态 | 采集状态（见下） | `待回填` → 回填后改写为 `已采集·通过 / 已采集·未通过 / 不适用(NA)` |
 | 来源 | 报告/文档引用 | `04 §3 核心口径②；02 §7 恩山⑤` |
 
-现状取值全集：`未采集·脚本已含 / 未采集·模板待手动 / 未采集·操作模板 / 未采集·构建态 / 未采集·面板兜底`，回填后为 `已采集·通过 / 已采集·未通过 / 不适用（NA）`（NA 需在备注写原因：命令缺失 / 接口不存在 / 场景未跑）。
+现状取值全集（v0 未上真机）：`未采集·脚本已含 / 未采集·模板待手动 / 未采集·操作模板 / 未采集·构建态 / 未采集·面板兜底`——**v0.md 全文以「待回填」合并标记即此五值的简写**，回填时按实际采集来源拆分改写；回填后为 `已采集·通过 / 已采集·未通过 / 不适用（NA）`（NA 需在备注写原因：命令缺失 / 接口不存在 / 场景未跑）。**两处词表一致，粒度以本 §2 为准。**
 
 ## 3. 回填记录表（每台真机一次；M0 两台都填）
 
@@ -81,14 +81,14 @@
 
 - [ ] 全量采集文件（开）已产出、`mode=real`、无中断、退出码 0
 - [ ] 对照采集文件（关）已产出
-- [ ] 53 个脚本指标位逐行有判定（OK/NA 均注明）
+- [ ] 53 个脚本指标位逐行有判定（OK/NA 均注明，含 `iperf3.bin_present` 工具链在位检查）
 - [ ] `iperf3.template.*` 四条手动执行完毕、数值已记
 - [ ] 10G↔Wi-Fi 的 CPU<5% 同期截屏已取
 - [ ] mesh 回程：ESTAB + 吞吐/时延 + `tx failed=0` 已记
 - [ ] CVE 在场：v0.md §1–§3 构建态行逐条打勾（git 核对 + 运行态日志核对）
 - [ ] 面板新增指标已登记改进项（如有）
 - [ ] 版本化动作已执行（bump v1 或数据修订）
-- [ ] 采集文件与截图已归档 `docs/metrics/runs/`
+- [ ] 采集文件与截图已归档 `docs/metrics/runs/`（按 runs/README.md 命名约定：`metrics-<YYYYMMDD>-<真机标识>-<on|off>-<序号>.tsv|json`；截图放 `runs/screens/`；勿复用旧文件）
 
 ## 7. 示例（示意数据，非真机实测；仅供填写格式参考）
 

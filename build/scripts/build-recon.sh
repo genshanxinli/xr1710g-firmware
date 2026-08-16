@@ -8,8 +8,9 @@
 #   ./build-recon.sh [--all]                      # 顺序执行全部步骤
 #   ./build-recon.sh --defconfig                  # 仅 defconfig
 #   ./build-recon.sh --feeds                      # 仅 feeds update -a（15min timeout）
-#   ./build-recon.sh --config-target              # 仅写入 airoha/an7581 target 配置
 #   ./build-recon.sh --build                      # 仅试编译（资源日志每 60s 一条）
+#   （--config-target 已删除：F7 后 target 配置走种子法——预置整块 .config 再
+#     defconfig，不再单独写 target 配置；06 报告 §4 F7 记录了 sed 法反杀教训）
 #
 # 环境：
 #   SRC       源码根（默认 /home/harness/workspace/openwrt-src）
@@ -154,7 +155,6 @@ main() {
       --all)          do_all=1 ;;
       --defconfig)    step_defconfig ;;
       --feeds)        step_feeds ;;
-      --config-target) step_config_target ;;
       --build)        step_build ;;
       -h|--help)      sed -n '1,20p' "$0"; exit 0 ;;
       *)              echo "未知参数: $a" >&2; exit 2 ;;
@@ -163,7 +163,6 @@ main() {
   if [ "$do_all" = 1 ] || [ $# -eq 0 ]; then
     step_defconfig
     step_feeds
-    step_config_target
     step_build
   fi
   log "===== build-recon done: $LOG ====="

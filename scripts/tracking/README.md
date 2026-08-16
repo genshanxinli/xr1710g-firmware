@@ -34,7 +34,7 @@ python3 scripts/tracking/report.py --raw docs/tracking/2026-08-16.raw   # 只看
 
 | 源 | 通道 | 原始文件 | 频率建议 |
 |---|---|---|---|
-| #1/#3 git.openwrt.org | `git ls-remote main` + 浅克隆定向日志（`git log --since=14d -- target/linux/airoha package/network/services/hostapd package/kernel/mt76`，`--filter=blob:none --shallow-since=30d`，临时目录用完即删） | `01_git_lsremote.txt` / `03_git_openwrt_log.txt` | 每日 |
+| #1/#3 main HEAD + 定向日志 | 多通道：主通道 GitHub 镜像 `GH_GIT`（`git ls-remote main` + 浅克隆定向日志，`git log --since=14d --abbrev=8 -- target/linux/airoha package/network/services/hostapd package/kernel/mt76`，`--filter=blob:none --shallow-since=30d`，临时目录用完即删），逐级回退 openwrt-git → GitHub API → cgit（链详见「通道与回退链」） | `01_git_lsremote.txt` / `03_git_openwrt_log.txt`（均含 `# source: <通道名>` 审计注释） | 每日 |
 | #4 GitHub 镜像 airoha | API `commits?path=target/linux/airoha&since=14d` | `04_gh_airoha_commits.json` | 每日 |
 | #5 GitHub 镜像 mt76 | API `commits?path=mt7996&since=14d` | `05_gh_mt76_commits.json` | 每日/隔日 |
 | #6 w1.fi | `w1.fi/releases/` 目录页，grep hostapd 版本号 | `06_w1fi_hostapd_versions.txt` | 每周 |
@@ -49,15 +49,37 @@ python3 scripts/tracking/report.py --raw docs/tracking/2026-08-16.raw   # 只看
 （naoki66/orangeyoo/hx801217，API 开销换低信息量，改 Watch→Releases only）、
 lore.kernel.org、TechInfoDepot、中文博客。
 
+## 通道与回退链（源 #1/#3）
+
+git.openwrt.org 的 git/cgit 端点存在**间歇性故障**（首期 01/03 SKIP 即因此：当日 11:57 同一
+端点全部成功、cgit 带 `path=` 过滤页 3/3 次 502）。故源 #1/#3 改为多通道，
+**主通道 = GitHub 镜像 `github.com/openwrt/openwrt.git`**（ls-remote SHA 与源站一致、
+部分克隆 filter+shallow 生效）：
+
+- **01（main HEAD）**：`gh-git ls-remote` → `openwrt-git ls-remote` → GitHub API
+  `commits/main`（取 sha 拼 `<sha>\trefs/heads/main`）→ cgit `atom/?h=main`（首条 `urn:sha1:`）。
+  成功统一落盘 `<sha>\trefs/heads/main`（report.py 消费契约不变：只取首行 sha）。
+- **03（定向日志）**：gh-git 浅克隆 → openwrt-git 浅克隆 → GitHub API 三路径
+  `commits?path=<airoha|hostapd|mt76>&since=..&per_page=100`（剔 Merge、按 sha 去重、
+  合并重建 `%h %ad %s` 行）→ cgit `log/?h=main&path=...`（响应体含 `502 Bad Gateway`
+  即跳过、允许 1 次重试；行级解析尽力而为）。
+- 03 文件首行固定写 `# source: <通道名>`（`gh-git` / `openwrt-git` / `gh-api` / `cgit`）作
+  审计痕迹；report.py 解析 03 时**跳过 `#` 开头行**，格式契约不变。
+- git 端点全挂时 03 走 API 重建/ cgit，01 走 API/cgit，单源仍如实记 OK/SKIP。
+
 ## 依赖
 
 - bash（GNU）、curl、git、python3（≥3.8，无第三方包）、`sort -V`、grep/sed/awk。
-- 单次运行网络开销：**4 次 GitHub API** + 3 次静态页（w1.fi / downloads×2）+ 2 次 git 协议操作（ls-remote、浅克隆）+ 1 次 linux 主线探测 ≈ 15–90 秒（浅克隆是主要耗时）。
+- 单次运行网络开销：**常规 4 次 GitHub API**（#4/#5/PR/linux-dts；回退通道全爆时最坏再 +4 =
+  8 次，仍远低于 60/h）+ 3 次静态页（w1.fi / downloads×2）+ 2 次 git 协议操作（ls-remote、
+  浅克隆，gh-git 优先）+ 1 次 linux 主线探测 ≈ 15–90 秒（浅克隆是主要耗时）。
 
 ## 限流约定（实测事实为本）
 
-- **GitHub API 未认证 60 次/时**（按出口 IP）：脚本每次运行恰 4 次（#4/#5/PR/linux-dts），
-  且 **curl 无 --retry**——失败即记 SKIP，绝不重试轰炸；撞 403 时错误体落盘、`99_STATUS.tsv` 记原因。
+- **GitHub API 未认证 60 次/时**（按出口 IP）：常规恰 4 次（#4/#5/PR/linux-dts）；
+  回退通道全爆时最坏再 +4（#01 的 `commits/main` 1 次 + #03 三路径 commits 3 次）≤ 8 次，
+  仍远低于 60/h。且 **curl 无 --retry**——失败即记 SKIP，绝不重试轰炸；撞 403 时错误体落盘、
+  `99_STATUS.tsv` 记原因。
 - 论坛 `search.json` **⩽1 次/分**（否则 429）：本流水线不抓论坛，避免触发反爬。
 - 恩山需登录：人工每周回填。
 - CI 每周 1 次 + 手动触发，与"每夜保底"构建节奏解耦；如需提升配额，在 workflow 加 `env: GH_TOKEN`
@@ -79,7 +101,7 @@ lore.kernel.org、TechInfoDepot、中文博客。
 |---|---|
 | 某源 SKIP | 看 `99_STATUS.tsv` 原因列 + `00_fetch.log`；单源失败不影响其余源与报告 |
 | GitHub 403/429 | 本时段配额耗尽，SKIP 如实保留；勿立即重跑（60 次/时窗口），等下一小时或换 IP |
-| git 浅克隆失败 | `03_git_openwrt_log.txt` 缺失 → SKIP；可临时用 #4/#5 API 侧数据交叉核对 |
+| git 双克隆失败 | 03 自动落回 gh-api 三路径重建 / cgit 路径页（见「通道与回退链」）；若仍 SKIP 可临时用 #4/#5 API 侧数据交叉核对 |
 | 报告缺某节数据 | 对应 raw 文件缺失即该源 SKIP；检查 fetch 阶段日志 |
 
 新增源：在 `fetch.sh` 加抓取块（复用 `fok`/`fskip`/`http_get`），`report.py` 对应节加渲染即可。

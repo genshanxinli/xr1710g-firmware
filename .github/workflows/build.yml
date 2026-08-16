@@ -1,0 +1,441 @@
+name: build
+
+# ============================================================================
+# XR1710G 固件 CI 构建（M1「基线可刷」主路径）· build.yml
+#
+# 定位：M1 的构建主路径就是本 GitHub Actions CI；本机/探路机仅作对照验证
+# （无 root、缺宿主依赖的场景复现），详见 build/README.md §3。
+#
+# 触发设计：
+#   - push(build/**)      : 构建侧代码变动即构建
+#   - schedule 30 3 * * * : 每夜 03:30 UTC 保底构建（缓存生存线，见下）
+#   - schedule 0 */6 * * *: 每 6 小时轮询 PR #22397 / upstream main，有动静再触发
+#   - workflow_dispatch   : 手动指定 profile（默认 xr1710g-ubi）与 buildcache 开关
+#
+# 缓存 cadence（生存线约定）：
+#   - dl / 工具链缓存按「最近访问」淘汰——GitHub 对 7 天未访问的缓存直接驱逐；
+#   - 每夜保底构建保证缓存每天都被访问 → 缓存长期常驻生效；
+#   - 连续 7+ 天无构建（分支停摆）时缓存被淘汰属预期，恢复构建回落全量；
+#   - 所有缓存 key 统一前缀 cache-${branch}-，restore 按 target 逐级降级。
+#
+# 探路教训映射（docs/research/06-build-recon.md §4 F1–F9）：
+#   F1/F2 工作树缺失 → 完整 checkout/clone；F3/F4/F9 宿主依赖 → apt 一条命令
+#   （含 python3-setuptools，F9：Python≥3.12 无 distutils，OpenWrt 预检认
+#   setuptools shim）；F5 ncurses 链 → libncurses5-dev；F6 时间墙 → 240min 超时；
+#   F7 choice 反杀 → 严禁 sed 改 choice，配置走快照/种子 + defconfig；
+#   F8 换目标重烧工具链 → 按 target/subtarget 固定工具链缓存（stamp 指纹换代）。
+#
+# 补丁双路径（PR #22397 未合入期）：先 git apply --check pr22397.diff；
+# 冲突（an7581.mk 的 DEVICE_COMPAT_VERSION 2.0 / uboot-airoha PKG_VERSION
+# 2026.07 等演化面）→ 新文件整文件覆盖 + per-file 补丁逐个应用，冲突产物归档，
+# job 失败不静默。PR 合入后：本文件注释位扩展为 sync-openwrt-main job
+# （ADR-0001 完全自主分支：每日自动合入 upstream main + mt76/hostapd）。
+# ============================================================================
+
+on:
+  push:
+    branches: ['main']
+    paths:
+      - 'build/**'
+      - '.github/workflows/build.yml'
+  schedule:
+    - cron: '30 3 * * *'     # 每夜 03:30 UTC · 保底构建（缓存生存线）
+    - cron: '0 */6 * * *'    # 每 6 小时轮询 PR #22397 / upstream main
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: '构建 profile：xr1710g-ubi（默认）/ w1700k-ubi（PR 合入前占位）/ all'
+        type: choice
+        default: xr1710g-ubi
+        options:
+          - xr1710g-ubi
+          - w1700k-ubi
+          - all
+      enable_buildcache:
+        description: '启用 build_dir/target 缓存（标准 14G runner 必爆盘，默认关闭；仅大磁盘 runner 开启）'
+        type: boolean
+        default: false
+
+permissions:
+  actions: write   # 缓存 save + sync-detect 对 build.yml 的 workflow_dispatch
+  contents: read
+
+jobs:
+  # ==========================================================================
+  # J0 · sync-detect —— PR #22397 合并 / upstream main 变动检测（仅 schedule）
+  #
+  # PR 未合入期策略：永远「公开 main HEAD + 现场应用 device-layer」，本 job 只做
+  # 「有变化才重建」的节流。PR 合入后：此处扩展为 sync-openwrt-main job
+  # （ADR-0001 完全自主分支落地：每日自动 rebase/merge 上游 main + mt76/hostapd
+  # 到本分叉并提交），触发链与产物链不变。
+  #
+  # 状态存档经 actions/cache 持久化（key 含 run_id → 每次运行独立存档、可回溯）。
+  # GITHUB_TOKEN 配额 5000/h，本轮询每 6h 一次、每次 2 次 API 调用，无压力。
+  # ==========================================================================
+  sync-detect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    if: github.event_name == 'schedule'
+    concurrency:
+      group: xr1710g-sync-detect
+      cancel-in-progress: true
+    steps:
+      - name: Checkout 本仓库
+        uses: actions/checkout@v4
+
+      - name: 恢复上次检测状态
+        uses: actions/cache@v4
+        with:
+          path: .sync-state
+          key: cache-${{ github.ref_name }}-syncstate-${{ github.run_id }}
+          restore-keys: cache-${{ github.ref_name }}-syncstate-
+
+      - name: 检测 PR #22397 合并状态（state=merged 且 merge_commit_sha 有变化）
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -sS -f -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/openwrt/openwrt/pulls/22397 \
+            -o pr22397.json
+          python3 - <<'EOF'
+          import json, os
+          os.makedirs('.sync-state', exist_ok=True)
+          d = json.load(open('pr22397.json'))
+          merged = bool(d.get('merged'))
+          sha = (d.get('merge_commit_sha') or '').strip()
+          print(f'PR #22397: state={d.get("state")} merged={merged} merge_commit_sha={sha or "<none>"}')
+          prev = ''
+          try:
+              prev = open('.sync-state/pr22397-merge-sha', encoding='utf-8').read().strip()
+          except FileNotFoundError:
+              pass
+          changed = merged and bool(sha) and sha != prev
+          print(f'合并且提交前进（{prev or "首次检测"} → {sha[:12]}）= {changed}')
+          open('.sync-state/pr22397-merge-sha', 'w', encoding='utf-8').write(sha)
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              out.write(f'changed={"true" if changed else "false"}\n')
+          EOF
+
+      - name: 比对 upstream main HEAD 与存档
+        id: upstream
+        run: |
+          set -euo pipefail
+          mkdir -p .sync-state
+          head=$(git ls-remote https://git.openwrt.org/openwrt/openwrt.git main | awk '{print $1}')
+          echo "upstream main HEAD: ${head}"
+          prev=''
+          [ -f .sync-state/upstream-main-head ] && prev="$(cat .sync-state/upstream-main-head)"
+          echo "${head}" > .sync-state/upstream-main-head
+          if [ -z "${prev}" ] || [ "$prev" != "$head" ]; then
+            echo "upstream main 前进（${prev:-<无存档>} → ${head}）"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "upstream main 无变化"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 判定是否需要触发构建
+        id: decide
+        run: |
+          needed="false"
+          if [ "${{ github.event.schedule }}" = '30 3 * * *' ]; then
+            echo "每夜保底档（03:30）→ 必定构建"
+            needed="true"
+          fi
+          [ "${{ steps.pr.outputs.changed }}" = 'true' ] && { echo "PR #22397 有新合并 → 构建"; needed="true"; }
+          [ "${{ steps.upstream.outputs.changed }}" = 'true' ] && { echo "upstream main 前进 → 构建"; needed="true"; }
+          echo "needed=${needed}" >> "$GITHUB_OUTPUT"
+
+      - name: 触发 build 工作流（profile=all）
+        if: steps.decide.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -sS -f -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/build.yml/dispatches" \
+            -d '{"ref":"main","inputs":{"profile":"all"}}'
+          echo "已 dispatch build.yml（profile=all）"
+
+  # ==========================================================================
+  # J1 · build —— 矩阵构建（airoha/an7581 × 2 profile）
+  #   gemtek_w1700k-ubi : PR 合入前占位——直接用仓库内快照 config（存在）
+  #   gemtek_xr1710g-ubi: CI 现场种子自举生成 config（仓库不存 xr1710g config）
+  # ==========================================================================
+  build:
+    name: build-${{ matrix.profile }} (${{ matrix.target }}/${{ matrix.subtarget }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    concurrency:
+      group: build-${{ matrix.profile }}
+      cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: gemtek_w1700k-ubi
+            target: airoha
+            subtarget: an7581
+            config_mode: snapshot   # PR 合入前占位：build/configs/ 快照直接可用
+          - profile: gemtek_xr1710g-ubi
+            target: airoha
+            subtarget: an7581
+            config_mode: seed       # 种子自举：应用 device-layer → defconfig 现场生成
+    # workflow_dispatch 指定单 profile 时只跑对应的档；push/schedule 全跑
+    if: >-
+      ${{
+        github.event_name != 'workflow_dispatch' ||
+        inputs.profile == 'all' ||
+        (inputs.profile == 'xr1710g-ubi' && matrix.profile == 'gemtek_xr1710g-ubi') ||
+        (inputs.profile == 'w1700k-ubi' && matrix.profile == 'gemtek_w1700k-ubi')
+      }}
+    steps:
+      - name: Checkout 本仓库（补丁/配置来源）
+        uses: actions/checkout@v4
+        with:
+          path: xr1710g
+
+      - name: 日期指纹（dl 缓存 key 每日换代 → 每夜档即是生存线）
+        id: date
+        run: echo "today=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - name: 计算工具链指纹（stamp 内容 sha256 → 换代）
+        id: tcstamp
+        run: |
+          set -euo pipefail
+          # 全新 runner 尚无 staging_dir → 指纹为空（sha256 空输入 = e3b0c44298fc），
+          # 形成确定性稳定 key；restore-keys 按 target/subtarget 逐级降级。
+          # stamp 指纹在（自托管/复用 runner 等）残留 toolchain 状态下自动换代。
+          h=''
+          if [ -d openwrt-src/staging_dir ]; then
+            h=$(cd openwrt-src/staging_dir && find toolchain-*/stamp -type f -print0 2>/dev/null | sort -z | xargs -0 cat 2>/dev/null | sha256sum | cut -c1-12)
+          fi
+          echo "h=${h:-none}" >> "$GITHUB_OUTPUT"
+          echo "toolchain fingerprint: ${h:-none}"
+
+      - name: 安装宿主依赖（F3/F4/F9：ncurses/gawk/rsync/unzip/distutils→setuptools；含 python3-dev/swig 供 uboot-airoha 预检）
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib \
+            gettext git libncurses5-dev libssl-dev python3 python3-dev python3-setuptools \
+            rsync swig unzip zlib1g-dev
+
+      - name: 克隆 OpenWrt main（浅克隆 + blob:none，F1/F2：工作树完整）
+        run: git clone --depth=1 --filter=blob:none https://github.com/openwrt/openwrt.git openwrt-src
+
+      - name: 恢复 dl 缓存（key 含日期 → 每日新档；restore 逐级降级）
+        id: dl-cache
+        uses: actions/cache@v4
+        with:
+          path: openwrt-src/dl
+          key: cache-${{ github.ref_name }}-dl-${{ matrix.target }}-${{ matrix.profile }}-${{ steps.date.outputs.today }}
+          restore-keys: |
+            cache-${{ github.ref_name }}-dl-${{ matrix.target }}-${{ matrix.profile }}-
+            cache-${{ github.ref_name }}-dl-${{ matrix.target }}-
+            cache-${{ github.ref_name }}-dl-
+
+      - name: 恢复工具链缓存（toolchain-* + host + hostpkg；F8：按 target/subtarget 固定）
+        id: toolchain-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            openwrt-src/staging_dir/toolchain-*
+            openwrt-src/staging_dir/host
+            openwrt-src/staging_dir/hostpkg
+          key: cache-${{ github.ref_name }}-toolchain-${{ matrix.target }}-${{ matrix.subtarget }}-${{ steps.tcstamp.outputs.h }}
+          restore-keys: |
+            cache-${{ github.ref_name }}-toolchain-${{ matrix.target }}-${{ matrix.subtarget }}-
+            cache-${{ github.ref_name }}-toolchain-${{ matrix.target }}-
+
+      # build_dir/target 默认不缓存：标准 runner 磁盘 14G，全量 build_dir 9.5G+，
+      # 缓存叠加必爆盘；仅 input.enable_buildcache=true 且大磁盘 runner 时启用
+      #（key 含 github.sha → 每次提交独立缓存线，避免跨提交污染）。
+      - name: 恢复 build_dir/target 缓存（默认禁用）
+        if: inputs.enable_buildcache == 'true'
+        uses: actions/cache@v4
+        with:
+          path: openwrt-src/build_dir/target-*
+          key: cache-${{ github.ref_name }}-build-${{ matrix.target }}-${{ matrix.subtarget }}-${{ github.sha }}
+          restore-keys: |
+            cache-${{ github.ref_name }}-build-${{ matrix.target }}-${{ matrix.subtarget }}-
+
+      - name: feeds update + install
+        run: |
+          cd "$GITHUB_WORKSPACE/openwrt-src"
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      # device-layer 仅 xr1710g（seed）档需要：xr1710g profile 由补丁注册。
+      # w1700k（snapshot）档 = main 原生 profile，不应用补丁（现网 main 即可
+      # 直接构建 w1700k，作管线绿灯 canary；PR 合入后两档走同一条补丁路径）。
+      - name: 应用设备适配层补丁（双路径：整 diff → 冲突时新文件覆盖 + per-file，仅 seed 档）
+        if: matrix.config_mode == 'seed'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE/xr1710g"
+          DL="$ROOT/build/patches/device-layer"
+          cd "$GITHUB_WORKSPACE/openwrt-src"
+          mkdir -p conflict-archive
+          if git apply --check "$DL/pr22397.diff" 2>conflict-archive/full-diff.check.log; then
+            git apply "$DL/pr22397.diff"
+            echo "device-layer: pr22397.diff 干净应用（整 diff 路径）"
+          else
+            echo "::warning::pr22397.diff 与当前 main 冲突（预期：an7581.mk / uboot-airoha 已演化）→ 走 per-file 路径"
+            # ① 新文件整文件覆盖（无上下文冲突）
+            cp "$DL/target/linux/airoha/dts/an7581-gemtek-17xx-common.dtsi" target/linux/airoha/dts/
+            cp "$DL/target/linux/airoha/dts/an7581-xr1710g-ubi.dts"        target/linux/airoha/dts/
+            cp "$DL/package/boot/uboot-airoha/patches/999-airoha-add-gemtek-xr1710g.patch" \
+               package/boot/uboot-airoha/patches/
+            # ② 修改/重命名文件 per-file 补丁逐个应用（顺序 = 归档顺序）
+            failed=0
+            for p in \
+              package/boot/uboot-airoha/patches/997-airoha-add-snfi-label.patch \
+              package/boot/uboot-airoha/patches/998-airoha-add-gemtek-w1700k.patch \
+              package/boot/uboot-tools/uboot-envtools/files/airoha_an7581.patch \
+              package/boot/uboot-airoha/Makefile.patch \
+              target/linux/airoha/image/an7581.mk.patch \
+              target/linux/airoha/dts/an7581-w1700k-ubi.dts.patch \
+              target/linux/airoha/an7581/base-files/etc/board.d/02_network.patch \
+              target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan.patch \
+              target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh.patch ; do
+              name="$(basename "$p")"
+              if git apply --check "$DL/$p" 2>"conflict-archive/$name.check.log"; then
+                git apply "$DL/$p" \
+                  || { echo "$p: git apply 失败（check 通过仍失败）" | tee -a conflict-archive/conflicts.txt; failed=1; }
+              else
+                echo "$p: per-file 冲突（check 失败）" | tee -a conflict-archive/conflicts.txt
+                failed=1
+              fi
+            done
+            if [ "$failed" -ne 0 ]; then
+              echo "::error::device-layer 双路径未全部成功——冲突产物已归档 conflict-archive/，job 失败（不静默）"
+              exit 1
+            fi
+            echo "device-layer: 双路径应用完成（新文件覆盖 + per-file 补丁）"
+          fi
+          # 冒烟：XR1710G 关键文件就位
+          test -f target/linux/airoha/dts/an7581-xr1710g-ubi.dts
+          test -f package/boot/uboot-airoha/patches/999-airoha-add-gemtek-xr1710g.patch
+          grep -q 'gemtek_xr1710g-ubi' target/linux/airoha/image/an7581.mk
+          echo "device-layer 冒烟校验通过"
+
+      - name: 生成/使用目标配置（快照 or 种子自举；F7：严禁 sed 改 choice）
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE/xr1710g"
+          cd "$GITHUB_WORKSPACE/openwrt-src"
+          # 权威种子 = 仓库内 w1700k 快照（target=airoha/an7581 整块一致，defconfig
+          # 才能落到 airoha 目标；空 .config 只会给默认 target——F7 教训）。
+          # 严禁对 TARGET choice 行做 sed：会留下互相冲突的多个 *_TARGET=y。
+          cp "$ROOT/build/configs/an7581-gemtek-w1700k.config" .config
+          if [ "${{ matrix.config_mode }}" = 'seed' ]; then
+            # 种子自举（xr1710g-ubi）：只切换 DEVICE_* 器件符号（独立 bool，非
+            # choice 成员）。scripts/config 在现网 main 已是 kconfig 源码目录，
+            # 故直接用 python 做**整行对**变换（等号行↔not-set 行同时改写，
+            # 不遗留一半状态），随后 defconfig 归一化 = F7 正解（空/整块种子 +
+            # defconfig，严禁对 choice 行做部分 sed）。xr1710g profile 由
+            # device-layer 补丁注册，defconfig 自动出现。
+            python3 - <<'EOF'
+          import re
+          p = '.config'
+          s = open(p, encoding='utf-8').read()
+          w = 'CONFIG_TARGET_airoha_an7581_DEVICE_gemtek_w1700k-ubi'
+          x = 'CONFIG_TARGET_airoha_an7581_DEVICE_gemtek_xr1710g-ubi'
+          # 占位档器件 → 关闭（等号行 ↔ not-set 行整体对换）
+          s = re.sub(rf'^{re.escape(w)}=y$', f'# {w} is not set', s, flags=re.M)
+          # 目标器件 → 开启；快照里没有该行（无 device-layer 时生成）则补写
+          if re.search(rf'^{re.escape(x)}=y$', s, flags=re.M) is None:
+              s = re.sub(rf'^# {re.escape(x)} is not set$', f'{x}=y', s, flags=re.M)
+          if re.search(rf'^{re.escape(x)}=y$', s, flags=re.M) is None:
+              s += f'\n{x}=y\n'
+          open(p, 'w', encoding='utf-8').write(s)
+          print('种子器件切换完成（w1700k→xr1710g）')
+          EOF
+            make defconfig
+            grep -q '^CONFIG_TARGET_airoha_an7581_DEVICE_gemtek_xr1710g-ubi=y' .config \
+              || { echo "::error::种子自举失败：xr1710g profile 未出现在 defconfig 结果"; exit 1; }
+            # 器件选定 → 其 u-boot 变体作为 DEFAULT 包自动进入构建
+            #（实测 main 生成 PACKAGE_u-boot-an7581_gemtek_w1700k=y）→
+            # an7581-chainloader 在 image 阶段产出 chainload-uboot.itb。
+            grep -q '^CONFIG_PACKAGE_u-boot-an7581_gemtek_xr1710g=y' .config \
+              || echo "::warning::u-boot 变体未自动启用——chainload-uboot.itb 可能缺失"
+            echo "种子自举 OK：gemtek_xr1710g-ubi 已激活（.config 现场生成）"
+          else
+            make defconfig
+            grep -q '^CONFIG_TARGET_airoha_an7581_DEVICE_gemtek_w1700k-ubi=y' .config \
+              || { echo "::error::w1700k 占位 profile 未出现在 defconfig 结果"; exit 1; }
+            echo "快照模式 OK：gemtek_w1700k-ubi 已激活（占位）"
+          fi
+          grep -q '^CONFIG_TARGET_airoha=y' .config \
+            || { echo "::error::target 回落/choice 冲突（F7）——.config 校验失败"; exit 1; }
+
+      - name: 构建固件（make -j$(nproc) V=s；日志尾部 tee，失败完整归档）
+        shell: bash
+        run: |
+          cd "$GITHUB_WORKSPACE/openwrt-src"
+          set +e
+          make -j"$(nproc)" V=s 2>&1 | tee build.log | tail -n 80
+          rc=${PIPESTATUS[0]}
+          set -e
+          echo "make rc=$rc（步骤耗时约 $((SECONDS / 60)) 分钟）"
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::make 失败 rc=$rc；完整日志 build.log（见上传 artifact，含失败 tail）"
+            exit "$rc"
+          fi
+
+      - name: 导出构建用 config（GPL 归档，现场生成非仓库内文件）
+        shell: bash
+        run: |
+          cd "$GITHUB_WORKSPACE/openwrt-src"
+          mkdir -p bin/targets/airoha/an7581
+          cp .config "bin/targets/airoha/an7581/openwrt-airoha-an7581-gemtek_${{ matrix.profile }}.config"
+
+      - name: 校验固件产物（三件套 + sha256sums + buildinfo）
+        shell: bash
+        run: |
+          cd "$GITHUB_WORKSPACE/openwrt-src/bin/targets/airoha/an7581" \
+            || { echo "::error::bin/targets/airoha/an7581 目录缺失"; exit 1; }
+          ls -la | head -40
+          # 命名随 main 演化（PR 时期 -sysupgrade.itb，当前 main 为
+          # -squashfs-sysupgrade.itb）→ 按通配类别校验，不以精确名耦合
+          for cat in 'sysupgrade' 'initramfs-recovery' 'chainload-uboot'; do
+            hit=$(ls openwrt-airoha-an7581-gemtek_${{ matrix.profile }}-*${cat}*.itb 2>/dev/null || true)
+            [ -n "$hit" ] || { echo "::error::缺少 ${cat} 类别固件产物"; exit 1; }
+            echo "$cat → $hit"
+          done
+          [ -s sha256sums ]         || { echo "::error::缺少 sha256sums"; exit 1; }
+          [ -s config.buildinfo ]   || { echo "::error::缺少 config.buildinfo（GPL）"; exit 1; }
+          [ -s feeds.buildinfo ]    || { echo "::error::缺少 feeds.buildinfo"; exit 1; }
+          [ -s version.buildinfo ]  || { echo "::error::缺少 version.buildinfo"; exit 1; }
+          echo "固件产物校验通过"
+
+      - name: 上传固件产物
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.profile }}-${{ github.run_id }}
+          path: |
+            openwrt-src/bin/targets/airoha/an7581/openwrt-airoha-an7581-gemtek_${{ matrix.profile }}-*.itb
+            openwrt-src/bin/targets/airoha/an7581/openwrt-airoha-an7581-gemtek_${{ matrix.profile }}.config
+            openwrt-src/bin/targets/airoha/an7581/sha256sums
+            openwrt-src/bin/targets/airoha/an7581/config.buildinfo
+            openwrt-src/bin/targets/airoha/an7581/feeds.buildinfo
+            openwrt-src/bin/targets/airoha/an7581/version.buildinfo
+          if-no-files-found: error
+
+      - name: 上传构建日志 / 补丁冲突归档
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ matrix.profile }}-${{ github.run_id }}
+          path: |
+            openwrt-src/build.log
+            openwrt-src/conflict-archive/
+          if-no-files-found: warn

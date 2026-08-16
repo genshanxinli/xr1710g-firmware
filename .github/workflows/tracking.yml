@@ -4,10 +4,11 @@ name: tracking
 # XR1710G 自动跟进循环（M4）· 每周抓取 → 报告 → 提交
 #
 # 限流约定（维护者必读）：
-# - GitHub API 未认证限额 60 次/时（按出口 IP 计）。本 workflow 每次运行恰用 4 次：
+# - GitHub API 未认证限额 60 次/时（按出口 IP 计）。本 workflow 常规每次运行恰用 4 次：
 #     /commits?path=target/linux/airoha（源#4）、/commits?path=mt7996（源#5）、
 #     /pulls/22397、/torvalds/linux commits?path=arch/arm64/boot/dts/airoha
-#   每周 1 次 + 手动触发，远低于配额；撞 403 时 fetch.sh 记 SKIP 并在 99_STATUS.tsv
+#   回退通道全爆时最坏再 +4（#01 commits/main 1 次 + #03 三路径 commits 3 次）≤ 8 次，
+#   仍远低于配额（每周 1 次 + 手动触发）；撞 403 时 fetch.sh 记 SKIP 并在 99_STATUS.tsv
 #   写明原因，job 不假失败、不重试轰炸（curl 无 --retry）。
 # - 论坛 search.json ⩽1 次/分（否则 429）：本 workflow 不抓论坛；论坛帖
 #   #222776/#247242/#252504 与恩山帖子留人工/通知驱动（05-watchlist #7/#8/#9/#12）。
