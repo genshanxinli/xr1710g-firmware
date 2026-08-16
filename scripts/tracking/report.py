@@ -144,7 +144,7 @@ def render_upstream(r):
         by = {"airoha": [], "hostapd": [], "mt76": [], "other": []}
         for sha, dt, subj in rows:
             by[bucket(subj)].append((sha, dt, subj))
-        lines.append("### airoha / hostapd / mt76 定向日志（git.openwrt.org 浅克隆，源#1/#3）")
+        lines.append("### airoha / hostapd / mt76 定向日志（多通道回退，源#1/#3）")
         lines.append("")
         lines.append(f"共 **{len(rows)}** 条（14 天窗口；主题按关键词粗分桶）：")
         lines.append("")
@@ -438,7 +438,7 @@ def render_appendix(r, status):
     else:
         lines.append("（99_STATUS.tsv 缺失：fetch.sh 未运行或未写状态）")
     lines.append("")
-    lines.append("> 限流约定：GitHub API 未认证 60 次/时（本循环 4 次/run）；论坛 search.json ⩽1 次/分（不自动抓）；恩山人工。")
+    lines.append("> 限流约定：GitHub API 未认证 60 次/时（本循环常规 4 次/run、回退最坏 ≤8 次）；论坛 search.json ⩽1 次/分（不自动抓）；恩山人工。")
     return lines
 
 

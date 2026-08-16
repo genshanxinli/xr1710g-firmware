@@ -187,13 +187,8 @@ jobs:
             subtarget: an7581
             config_mode: seed       # 种子自举：应用 device-layer → defconfig 现场生成
     # workflow_dispatch 指定单 profile 时只跑对应的档；push/schedule 全跑
-    if: >-
-      ${{
-        github.event_name != 'workflow_dispatch' ||
-        inputs.profile == 'all' ||
-        (inputs.profile == 'xr1710g-ubi' && matrix.profile == 'gemtek_xr1710g-ubi') ||
-        (inputs.profile == 'w1700k-ubi' && matrix.profile == 'gemtek_w1700k-ubi')
-      }}
+    # 注意：${{ 必须与表达式同行连续（YAML 折叠标量会拆散它 → workflow 解析失败）
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.profile == 'all' || (inputs.profile == 'xr1710g-ubi' && matrix.profile == 'gemtek_xr1710g-ubi') || (inputs.profile == 'w1700k-ubi' && matrix.profile == 'gemtek_w1700k-ubi') }}
     steps:
       - name: Checkout 本仓库（补丁/配置来源）
         uses: actions/checkout@v4
