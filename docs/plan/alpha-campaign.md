@@ -73,10 +73,10 @@
 | D0-4 | **公钥装进路由器**（authorized_keys） | 人工 | `ssh -i key` 免密 | — | ⏳ 待人工（用户） |
 | D0-5 | 测试机装 bash（opkg） | AI+人工 | `command -v bash` | D0-4（密钥） | ⏳ D0-4 后 |
 | D1 | **消解启动**：device-layer re-roll 对齐现网 main（v2 补丁集，10 文件） | AI | 冲突清单清零 | D0-3 | ✅ 2026-08-17（v2 全绿 + defconfig 三断言） |
-| D2 | CI xr1710g 档转绿（w1700k 占位档绿灯对照） | AI | Actions 绿 | D1 | 🚧 **RUNNING**（run 31963637357，make 阶段；⚠️ 31963237947 被 build/** 推送取消——教训见关联待办） |
+| D2 | CI xr1710g 档转绿（w1700k 占位档绿灯对照） | AI | Actions 绿 | D1 | 🚧 **RUNNING**（run 31964412187，18:22 起；⚠️ 前两 run 均被本仓推送取消——教训见关联待办，修复已生效） |
 | D3 | 首版镜像三件套（sysupgrade/initramfs-recovery/chainload-uboot） | AI | artifact 齐全 | D2 | ⏳ 工具就绪：tools/ci/fetch-artifacts.sh（凭据 PAT 已验证可下载） |
 | D4 | 产物自检 + sha256 归档（对照双路径冲突面复核） | AI | 清单 | D3 | ⏳ 工具就绪：tools/ci/check-artifacts.sh（逻辑实测 PASS） |
-| D5 | 真机回归管线：冒烟脚本 + collect.sh --host 打通 | AI | 冒烟跑通（7/1/0 实测 ✅）；一次全量 real 采集 | D0-4/D0-5 | 🚧 smoke.sh 已落地并实测；collect.sh 待 bash+密钥 |
+| D5 | 真机回归管线：冒烟 + 每日驱动 + collect.sh | AI | run-daily 8/8 PASS ✅；一次全量 real 采集 | D0-4/D0-5 | 🚧 smoke/run-daily 落地实测 8/8；collect.sh 待 bash+密钥 |
 | D6 | **首刷人工放行**：AI 产镜像 + 刷机卡 → 通知用户 → 用户手动刷入 → 回报 | 人工 | 首刷成功日志 | D3/D5 | ⏳ 待人工 |
 | D7–D13 | 每日真机回归循环（冒烟 + NPU v0 回填 + 条件专项）+ P0/P1 修复迭代 | AI+人工兜底 | 逐日报告；P0/P1→0 | D6 | ⏳ |
 | D14 | **v0.1 锁基线**（P0/P1=0）→ 恢复上游跟随 → 私人 alpha 交付 | AI+人工 | 基线锁定 + alpha 交付 | D7–D13 | ⏳ |
@@ -84,11 +84,12 @@
 关联待办（非 D 序列）：
 - ~~known-issues 清单~~ → 模板已建 `docs/testing/known-issues.md`（P2/P3 分级 + 社区基线参照归属口径）
 - ~~build.yml 注释与策略同步~~ → D1 已完成（双路径 v2；主动消解第三路径流程见 ADR-0003 修订）
-- **结构性修复（本地已完成，推送延迟）**：`fetch/check-artifacts.sh` 已移出 `build/`（→
+- **结构性修复（✅ 已在远端生效）**：`fetch/check-artifacts.sh` 已移出 `build/`（→
   `tools/ci/`，路径已修）+ `.gitignore` 加 `build/artifacts/` + build.yml push 触发收窄为
-  `build/patches/**`+`build/configs/**`——**教训：push 到 `build/**` 触发 build.yml 且
-  `concurrency.cancel-in-progress` 会取消在跑构建**；修复提交已在本地，**待 run 完成后再
-  push**（避免再次触发/取消）；run 完成前严禁提交 `build/**`（docs/、tools/ 之外安全）
+  `build/patches/**`+`build/configs/**`——**教训：push 到 `build/**`（含 workflow 文件自身）
+  触发 build.yml 且 `concurrency.cancel-in-progress` 会取消在跑构建**；本修复原计划延迟推送，
+  但 `git push` 推整分支时随 47ba394 一并上车，现已在远端生效。**流程纪律：run 完成前不改
+  动/推送 build.yml 与 build/patches、build/configs（docs/、tools/ 推送安全）**
 
 ## 5. 交接协议（新会话必读）
 
@@ -134,4 +135,7 @@
 ## 7. 入库存档红线
 
 - 不提交：SSH/PPPoE 凭据、内网敏感拓扑；此文档 §2 已打码（仅公网侧 IP 与网段）。
-- README/CONTEXT/ADR 只承载概念与决策，不承载任何访问凭证。
+- README/CONTEXT/ADR 只承载概念与决策，不承载任何访问凭证。- **2026-08-17 · 目标轮 6**：run 31963637357 又被 cancelled——根因 = `git push` 推整分支，
+  结构性修复 6ee1e7e 随 47ba394 一并推送（改动 build.yml 自身 → 必触发）→ 新 run
+  31964412187（18:22）取代之。**修复现已远端生效**（后续 tools/docs 推送不再触发构建）。
+  当前 run 31964412187 双 job 已达 feeds 阶段（冷构建 ETA ~21:30 UTC）。
