@@ -5,6 +5,7 @@ Gemtek XR1710G（Airoha AN7581 平台 · MT7996 Wi-Fi 7 / BE19000 / 双万兆）
 - 定位 · 路线图 · 风险：见 [`docs/README.md`](./docs/README.md)
 - 术语表：[`CONTEXT.md`](./CONTEXT.md)
 - 架构决策：`docs/adr/`
+- 现行战役（跨会话 kanban）：`docs/plan/alpha-campaign.md`
 
 > 仓库骨架已就位，M1 分叉开工中：跟踪循环脚本、构建探路、救砖 SOP、NPU 指标盘点正在并行产出。
 
