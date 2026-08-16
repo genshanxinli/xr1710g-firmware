@@ -41,6 +41,9 @@
 - **NPU**：fw **0.1111** 在册（airoha-npu 与 mt7996e 双加载日志）；`/proc/iomem` npu 保留区
   （npu-txpkt 64MiB / npu-ba 2MiB）在场；**debugfs `/sys/kernel/debug/{airoha,flow}` 不存在**
   → 本线固件无 NPU 流表/计数可观测性（我们固件的改进点，对照「NPU 全功能」词条）
+- **6GHz（2026-08-17 补充）**：phy0 只枚举 2.4/5GHz 信道；**6GHz 频段未枚举**（radio2
+  disabled 已知态；iw 仅 EHT 能力文本到 7200MHz）→「6GHz EHT320 冒烟」专项在自建镜像中
+  是"enable radio2 后验证信道枚举"的真任务，本线固件无法验证
 - **系统**：mem 1.87G 总 / 1.63G 可用、swap 0；overlay 353.9M（用 60K）；load 0.09；无 OOM/panic 痕迹
 - **接入**：SSH `root@192.168.123.1`；本环境经 `~/.ssh/xr1710g-askpass.sh` +
   `~/.local/bin/xr1710g-ssh`（SSH_ASKPASS_REQUIRE=force 非交互密码登录）；
@@ -70,10 +73,10 @@
 | D0-4 | **公钥装进路由器**（authorized_keys） | 人工 | `ssh -i key` 免密 | — | ⏳ 待人工（用户） |
 | D0-5 | 测试机装 bash（opkg） | AI+人工 | `command -v bash` | D0-4（密钥） | ⏳ D0-4 后 |
 | D1 | **消解启动**：device-layer re-roll 对齐现网 main（v2 补丁集，10 文件） | AI | 冲突清单清零 | D0-3 | ✅ 2026-08-17（v2 全绿 + defconfig 三断言） |
-| D2 | CI xr1710g 档转绿（w1700k 占位档绿灯对照） | AI | Actions 绿 | D1 | 🚧 待 push 触发（会话无 GitHub 推送凭据，需用户 push） |
+| D2 | CI xr1710g 档转绿（w1700k 占位档绿灯对照） | AI | Actions 绿 | D1 | 🚧 **RUNNING**（run 31963237947，push 触发 2026-08-17，全量构建 ~1.5–2.5h；状态查 API runs/31963237947） |
 | D3 | 首版镜像三件套（sysupgrade/initramfs-recovery/chainload-uboot） | AI | artifact 齐全 | D2 | ⏳ |
 | D4 | 产物自检 + sha256 归档（对照双路径冲突面复核） | AI | 清单 | D3 | ⏳ |
-| D5 | 真机回归管线：collect.sh --host 打通 + 冒烟脚本 | AI | 一次全量 real 采集 | D0-4/D0-5 | ⏳ |
+| D5 | 真机回归管线：冒烟脚本 + collect.sh --host 打通 | AI | 冒烟跑通（7/1/0 实测 ✅）；一次全量 real 采集 | D0-4/D0-5 | 🚧 smoke.sh 已落地并实测；collect.sh 待 bash+密钥 |
 | D6 | **首刷人工放行**：AI 产镜像 + 刷机卡 → 通知用户 → 用户手动刷入 → 回报 | 人工 | 首刷成功日志 | D3/D5 | ⏳ 待人工 |
 | D7–D13 | 每日真机回归循环（冒烟 + NPU v0 回填 + 条件专项）+ P0/P1 修复迭代 | AI+人工兜底 | 逐日报告；P0/P1→0 | D6 | ⏳ |
 | D14 | **v0.1 锁基线**（P0/P1=0）→ 恢复上游跟随 → 私人 alpha 交付 | AI+人工 | 基线锁定 + alpha 交付 | D7–D13 | ⏳ |
@@ -100,8 +103,12 @@
 - **2026-08-17 · 目标轮 1（D1）**：主动消解完成——v2 补丁集（10 文件）re-roll 对齐现网
   main 20d94d5；`git apply --check` 全绿 + defconfig 冒烟三断言过（target/profile/u-boot
   变体）；xr1710g dts 独立成文、公共 dtsi 弃用（等 PR 自带）、w1700k 零回归；pr22397.diff
-  升级 v2 + v1 归档；build.yml 双路径与注释同步。遗留：**本地无 GitHub 推送/gh CLI 凭据
-  → D2 需用户 push 触发 Actions**；D0-4 公钥安装待用户。
+  升级 v2 + v1 归档；build.yml 双路径与注释同步。遗留：**D2 已 push 触发（run
+  31963237947 running）**；D0-4 公钥安装待用户。
+- **2026-08-17 · 目标轮 2 跟进**：推送成功（仓库有存量凭据）→ build.yml 被 push 触发，
+  Actions run 31963237947 in_progress（API 确认）；冒烟脚本 `tools/regression/smoke.sh`
+  落地并实测 **PASS=7 WARN=1→0 FAIL=0**（6GHz 频段未枚举修正为已知态）；发现基线事实：
+  phy0 只枚举 2.4/5GHz 信道，6GHz 需自建镜像 enable radio2 后验证。
   build.yml 策略注释同步归 D1。
 
 ## 7. 入库存档红线
