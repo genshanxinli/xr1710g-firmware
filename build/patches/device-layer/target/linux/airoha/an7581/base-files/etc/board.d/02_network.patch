@@ -1,5 +1,5 @@
 diff --git a/target/linux/airoha/an7581/base-files/etc/board.d/02_network b/target/linux/airoha/an7581/base-files/etc/board.d/02_network
-index 267873f0226ab1..4014d807a23d77 100644
+index 107ca3704..21c30d5ec 100644
 --- a/target/linux/airoha/an7581/base-files/etc/board.d/02_network
 +++ b/target/linux/airoha/an7581/base-files/etc/board.d/02_network
 @@ -14,7 +14,8 @@ an7581_setup_interfaces()

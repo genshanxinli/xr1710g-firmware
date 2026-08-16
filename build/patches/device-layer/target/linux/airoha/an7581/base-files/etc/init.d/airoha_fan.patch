@@ -1,5 +1,5 @@
 diff --git a/target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan b/target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan
-index ab9eeca83ae695..6ec385ad7f4fd6 100755
+index b9d5633bd..9f327398e 100755
 --- a/target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan
 +++ b/target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan
 @@ -21,7 +21,8 @@ find_nct7802()

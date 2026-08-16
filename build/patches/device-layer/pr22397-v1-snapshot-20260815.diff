@@ -1,9 +1,9 @@
 diff --git a/package/boot/uboot-airoha/Makefile b/package/boot/uboot-airoha/Makefile
-index 5db35c0..2da4651 100644
+index 52b95c68edc70e..cc8cfe2c8ab73e 100644
 --- a/package/boot/uboot-airoha/Makefile
 +++ b/package/boot/uboot-airoha/Makefile
-@@ -24,6 +24,13 @@ define U-Boot/an7581_gemtek_w1700k
-   BUILD_SUBTARGET:=an7581
+@@ -54,6 +54,14 @@ define U-Boot/an7581_gemtek_w1700k
+   UBOOT_IMAGE:=u-boot.bin
  endef
  
 +define U-Boot/an7581_gemtek_xr1710g
@@ -11,19 +11,20 @@ index 5db35c0..2da4651 100644
 +  UBOOT_CONFIG:=an7581_xr1710g
 +  BUILD_DEVICES:=gemtek_xr1710g-ubi
 +  BUILD_SUBTARGET:=an7581
++  UBOOT_IMAGE:=u-boot.bin
 +endef
 +
  define U-Boot/an7581_nokia_valyrian
    NAME:=Nokia Valyrian
    UBOOT_CONFIG:=an7581_nokia_valyrian
-@@ -83,6 +90,7 @@ endef
- 
- UBOOT_TARGETS := \
+@@ -69,6 +77,7 @@ UBOOT_TARGETS := \
+ 	an7581_rfb \
+ 	an7583_rfb \
  	an7581_gemtek_w1700k \
 +	an7581_gemtek_xr1710g \
- 	an7581_nokia_valyrian \
- 	an7581_nokia_xg-040g-md \
- 	an7581_rfb \
+ 	an7581_nokia_valyrian
+ 
+ UBOOT_CUSTOMIZE_CONFIG := \
 diff --git a/package/boot/uboot-airoha/patches/998-airoha-add-snfi-label.patch b/package/boot/uboot-airoha/patches/997-airoha-add-snfi-label.patch
 similarity index 100%
 rename from package/boot/uboot-airoha/patches/998-airoha-add-snfi-label.patch
@@ -34,7 +35,7 @@ rename from package/boot/uboot-airoha/patches/999-airoha-add-gemtek-w1700k.patch
 rename to package/boot/uboot-airoha/patches/998-airoha-add-gemtek-w1700k.patch
 diff --git a/package/boot/uboot-airoha/patches/999-airoha-add-gemtek-xr1710g.patch b/package/boot/uboot-airoha/patches/999-airoha-add-gemtek-xr1710g.patch
 new file mode 100644
-index 0000000..89158d8
+index 00000000000000..89158d859fe390
 --- /dev/null
 +++ b/package/boot/uboot-airoha/patches/999-airoha-add-gemtek-xr1710g.patch
 @@ -0,0 +1,298 @@
@@ -337,19 +338,21 @@ index 0000000..89158d8
 ++	status = "okay";
 ++};
 diff --git a/package/boot/uboot-tools/uboot-envtools/files/airoha_an7581 b/package/boot/uboot-tools/uboot-envtools/files/airoha_an7581
-index c0a5c9f..fb850a2 100644
+index 29e6c398868a41..b890042840170b 100644
 --- a/package/boot/uboot-tools/uboot-envtools/files/airoha_an7581
 +++ b/package/boot/uboot-tools/uboot-envtools/files/airoha_an7581
-@@ -13,6 +13,7 @@ board=$(board_name)
+@@ -12,7 +12,8 @@ touch /etc/config/ubootenv
+ board=$(board_name)
  
  case "$board" in
- gemtek,w1700k-ubi|\
-+gemtek,xr1710g-ubi|\
- nokia,xg-040g-md-ubi)
+-gemtek,w1700k-ubi)
++gemtek,w1700k-ubi|\
++gemtek,xr1710g-ubi)
  	ubootenv_add_ubi_default
  	;;
+ esac
 diff --git a/target/linux/airoha/an7581/base-files/etc/board.d/02_network b/target/linux/airoha/an7581/base-files/etc/board.d/02_network
-index 107ca37..21c30d5 100644
+index 267873f0226ab1..4014d807a23d77 100644
 --- a/target/linux/airoha/an7581/base-files/etc/board.d/02_network
 +++ b/target/linux/airoha/an7581/base-files/etc/board.d/02_network
 @@ -14,7 +14,8 @@ an7581_setup_interfaces()
@@ -363,7 +366,7 @@ index 107ca37..21c30d5 100644
  		;;
  	nokia,valyrian)
 diff --git a/target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan b/target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan
-index b9d5633..9f32739 100755
+index ab9eeca83ae695..6ec385ad7f4fd6 100755
 --- a/target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan
 +++ b/target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan
 @@ -21,7 +21,8 @@ find_nct7802()
@@ -377,23 +380,25 @@ index b9d5633..9f32739 100755
  
  		# Temporarily disable automatic fan control to configure curve
 diff --git a/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh b/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh
-index 8584b84..cd0b5e3 100644
+index 767f499faad1a9..e7cde071e1bf92 100644
 --- a/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh
 +++ b/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh
-@@ -33,6 +33,7 @@ platform_do_upgrade() {
+@@ -5,7 +5,8 @@ platform_do_upgrade() {
+ 	local board=$(board_name)
  
  	case "$board" in
- 		gemtek,w1700k-ubi|\
-+		gemtek,xr1710g-ubi|\
- 		nokia,xg-040g-md-ubi)
+-		gemtek,w1700k-ubi)
++		gemtek,w1700k-ubi|\
++		gemtek,xr1710g-ubi)
  			fit_do_upgrade "$1"
  			;;
-diff --git a/target/linux/airoha/dts/an7581-xr1710g-ubi.dts b/target/linux/airoha/dts/an7581-xr1710g-ubi.dts
+ 		*)
+diff --git a/target/linux/airoha/dts/an7581-gemtek-17xx-common.dtsi b/target/linux/airoha/dts/an7581-gemtek-17xx-common.dtsi
 new file mode 100644
-index 0000000..3375a44
+index 00000000000000..33479f075d29d9
 --- /dev/null
-+++ b/target/linux/airoha/dts/an7581-xr1710g-ubi.dts
-@@ -0,0 +1,449 @@
++++ b/target/linux/airoha/dts/an7581-gemtek-17xx-common.dtsi
+@@ -0,0 +1,255 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 +
 +/dts-v1/;
@@ -401,14 +406,10 @@ index 0000000..3375a44
 +#include <dt-bindings/leds/common.h>
 +#include <dt-bindings/gpio/gpio.h>
 +#include <dt-bindings/input/input.h>
-+#include <dt-bindings/phy/phy.h>
 +#include "an7581.dtsi"
 +#include "an7581-npu-mt7996.dtsi"
 +
 +/ {
-+	model = "Gemtek XR1710G (OpenWrt U-Boot layout)";
-+	compatible = "gemtek,xr1710g-ubi", "airoha,an7581", "airoha,en7581";
-+
 +	aliases {
 +		serial0 = &uart1;
 +		led-boot = &led_status_red;
@@ -463,7 +464,7 @@ index 0000000..3375a44
 +};
 +
 +&en7581_pinctrl {
-+	gpio-ranges = <&en7581_pinctrl 0 13 50>;
++	gpio-ranges = <&en7581_pinctrl 0 13 47>;
 +
 +	mdio_pins: mdio-pins {
 +		mux {
@@ -488,48 +489,6 @@ index 0000000..3375a44
 +		conf {
 +			pins = "pcie_reset2";
 +			drive-open-drain = <1>;
-+		};
-+	};
-+
-+	uart2_pins: uart2-pins {
-+		mux {
-+			function = "uart";
-+			groups = "uart2";
-+		};
-+	};
-+
-+	hsuart_pins: hsuart-pins {
-+		mux {
-+			function = "uart";
-+			groups = "hsuart";
-+		};
-+	};
-+
-+	gswp1_led0_pins: gswp1-led0-pins {
-+		mux {
-+			function = "phy1_led0";
-+			pins = "gpio33";
-+		};
-+	};
-+
-+	gswp1_led1_pins: gswp1-led1-pins {
-+		mux {
-+			function = "phy1_led1";
-+			pins = "gpio43";
-+		};
-+	};
-+
-+	gswp2_led0_pins: gswp2-led0-pins {
-+		mux {
-+			function = "phy2_led0";
-+			pins = "gpio34";
-+		};
-+	};
-+
-+	gswp2_led1_pins: gswp2-led1-pins {
-+		mux {
-+			function = "phy2_led1";
-+			pins = "gpio44";
 +		};
 +	};
 +};
@@ -560,7 +519,7 @@ index 0000000..3375a44
 +
 +		partition@700000 {
 +			label = "ubi";
-+			reg = <0x00700000 0x1b700000>;
++			reg = <0x00700000 0x1f700000>;
 +			compatible = "linux,ubi";
 +
 +			volumes {
@@ -589,9 +548,9 @@ index 0000000..3375a44
 +		};
 +
 +		/* reserved for bad block table */
-+		reserved_bmt@1be00000 {
++		reserved_bmt@1fe00000 {
 +			label = "reserved_bmt";
-+			reg = <0x1be00000 0x04200000>;
++			reg = <0x1fe00000 0x00200000>;
 +			read-only;
 +		};
 +	};
@@ -631,20 +590,7 @@ index 0000000..3375a44
 +&pcie0 {
 +	status = "okay";
 +
-+	reg = <0x0 0x1fc00000 0x0 0x1670>,
-+	      <0x0 0x1fc20000 0x0 0x1670>;
-+	reg-names = "pcie-mac", "sec-pcie-mac";
-+
-+	resets = <&scuclk EN7581_PCIE0_RST>,
-+		 <&scuclk EN7581_PCIE1_RST>,
-+		 <&scuclk EN7581_PCIC_PERSTOUT0_RST>,
-+		 <&scuclk EN7581_PCIC_PERSTOUT1_RST>;
-+	reset-names = "phy-lane0", "phy-lane1",
-+		      "perstout", "sec-perstout";
-+
-+	num-lanes = <2>;
-+
-+	airoha,scu = <&scuclk>;
++	airoha,x2-mode;
 +
 +	pinctrl-names = "default";
 +	pinctrl-0 = <&pcie0_rst_pins>;
@@ -687,10 +633,6 @@ index 0000000..3375a44
 +	};
 +};
 +
-+&pcie1 {
-+	status = "disabled";
-+};
-+
 +&pcie2 {
 +	status = "okay";
 +
@@ -712,15 +654,333 @@ index 0000000..3375a44
 +	nvmem-cells = <&lan_mac 0>;
 +	nvmem-cell-names = "mac-address";
 +};
+diff --git a/target/linux/airoha/dts/an7581-w1700k-ubi.dts b/target/linux/airoha/dts/an7581-w1700k-ubi.dts
+index 6f4158599f937d..b2ebd53d63e8e0 100644
+--- a/target/linux/airoha/dts/an7581-w1700k-ubi.dts
++++ b/target/linux/airoha/dts/an7581-w1700k-ubi.dts
+@@ -2,67 +2,19 @@
+ 
+ /dts-v1/;
+ 
+-#include <dt-bindings/leds/common.h>
+-#include <dt-bindings/gpio/gpio.h>
+-#include <dt-bindings/input/input.h>
+-#include "an7581.dtsi"
+-#include "an7581-npu-mt7996.dtsi"
++#include "an7581-gemtek-17xx-common.dtsi"
+ 
+ / {
+ 	model = "Gemtek W1700K (OpenWrt U-Boot layout)";
+ 	compatible = "gemtek,w1700k-ubi", "airoha,an7581", "airoha,en7581";
+ 
+-	aliases {
+-		serial0 = &uart1;
+-		led-boot = &led_status_red;
+-		led-failsafe = &led_status_blue;
+-		led-upgrade = &led_status_blue;
+-		led-running = &led_status_green;
+-	};
+-
+ 	chosen {
+ 		rootdisk = <&ubi_rootfs>;
+ 		bootargs = "console=ttyS0,115200 earlycon ubi.block=0,fit root=/dev/fit0 rootwait";
+ 		stdout-path = "serial0:115200n8";
+ 	};
+ 
+-	keys {
+-		compatible = "gpio-keys";
+-
+-		key-restart {
+-			label = "reset";
+-			gpios = <&en7581_pinctrl 0 GPIO_ACTIVE_LOW>;
+-			linux,code = <KEY_RESTART>;
+-		};
+-	};
+-
+ 	leds {
+-		compatible = "gpio-leds";
+-
+-		led_status_green: led-0 {
+-			color = <LED_COLOR_ID_GREEN>;
+-			function = LED_FUNCTION_STATUS;
+-			gpios = <&en7581_pinctrl 17 GPIO_ACTIVE_LOW>;
+-		};
+-
+-		led_status_blue: led-1 {
+-			color = <LED_COLOR_ID_BLUE>;
+-			function = LED_FUNCTION_STATUS;
+-			gpios = <&en7581_pinctrl 19 GPIO_ACTIVE_LOW>;
+-		};
+-
+-		led_status_red: led-2 {
+-			color = <LED_COLOR_ID_RED>;
+-			function = LED_FUNCTION_STATUS;
+-			gpios = <&en7581_pinctrl 29 GPIO_ACTIVE_LOW>;
+-		};
+-
+-		led_status_white: led-3 {
+-			color = <LED_COLOR_ID_WHITE>;
+-			function = LED_FUNCTION_STATUS;
+-			gpios = <&en7581_pinctrl 20 GPIO_ACTIVE_LOW>;
+-		};
+-
+ 		led-4 {
+ 			color = <LED_COLOR_ID_GREEN>;
+ 			function = LED_FUNCTION_LAN;
+@@ -94,34 +46,6 @@
+ };
+ 
+ &en7581_pinctrl {
+-	gpio-ranges = <&en7581_pinctrl 0 13 47>;
+-
+-	mdio_pins: mdio-pins {
+-		mux {
+-			function = "mdio";
+-			groups = "mdio";
+-		};
+-
+-		conf {
+-			pins = "gpio2";
+-			output-high;
+-		};
+-	};
+-
+-	pcie0_rst_pins: pcie0-rst-pins {
+-		conf {
+-			pins = "pcie_reset0";
+-			drive-open-drain = <1>;
+-		};
+-	};
+-
+-	pcie2_rst_pins: pcie2-rst-pins {
+-		conf {
+-			pins = "pcie_reset2";
+-			drive-open-drain = <1>;
+-		};
+-	};
+-
+ 	/* W1700K does not use the built-in LED controller. Instead, it uses GPIO.
+ 	 * The driver fails to probe without gswpX_led0_pins defined, so put a dummy
+ 	 * here.
+@@ -156,168 +80,6 @@
+ 	};
+ };
+ 
+-&snfi {
+-	status = "okay";
+-};
+-
+-&spi_nand {
+-	#address-cells = <1>;
+-	#size-cells = <1>;
+-	partitions {
+-		compatible = "fixed-partitions";
+-		#address-cells = <1>;
+-		#size-cells = <1>;
+-
+-		partition@0 {
+-			label = "vendor";
+-			reg = <0x00000000 0x00600000>;
+-			read-only;
+-		};
+-
+-		partition@600000 {
+-			label = "chainloader";
+-			reg = <0x00600000 0x00100000>;
+-			read-only;
+-		};
+-
+-		partition@700000 {
+-			label = "ubi";
+-			reg = <0x00700000 0x1f700000>;
+-			compatible = "linux,ubi";
+-
+-			volumes {
+-				ubi-volume-ubootenv {
+-					volname = "ubootenv";
+-					nvmem-layout {
+-						compatible = "u-boot,env-redundant-bool";
+-					};
+-				};
+-
+-				ubi-volume-ubootenv2 {
+-					volname = "ubootenv2";
+-					nvmem-layout {
+-						compatible = "u-boot,env-redundant-bool";
+-					};
+-				};
+-
+-				ubi_rootfs: ubi-volume-fit {
+-					volname = "fit";
+-				};
+-
+-				ubi_factory: ubi-volume-factory {
+-					volname = "factory";
+-				};
+-			};
+-		};
+-
+-		/* reserved for bad block table */
+-		reserved_bmt@1fe00000 {
+-			label = "reserved_bmt";
+-			reg = <0x1fe00000 0x00200000>;
+-			read-only;
+-		};
+-	};
+-};
+-
+-&ubi_factory {
+-	nvmem-layout {
+-		compatible = "fixed-layout";
+-		#address-cells = <1>;
+-		#size-cells = <1>;
+-
+-		eeprom: eeprom@0 {
+-			reg = <0x0 0x1e00>;
+-		};
+-
+-		wan_mac: macaddr@5000 {
+-			reg = <0x5000 0x6>;
+-		};
+-
+-		lan_mac: macaddr@6000 {
+-			compatible = "mac-base";
+-			reg = <0x6000 0x6>;
+-			#nvmem-cell-cells = <1>;
+-		};
+-	};
+-};
+-
+-&i2c0 {
+-	status = "okay";
+-
+-	hwmon@2e {
+-		compatible = "nuvoton,nct7802";
+-		reg = <0x2e>;
+-	};
+-};
+-
+-&pcie0 {
+-	status = "okay";
+-
+-	airoha,x2-mode;
+-
+-	pinctrl-names = "default";
+-	pinctrl-0 = <&pcie0_rst_pins>;
+-	pcie@0,0 {
+-		reg = <0x0000 0 0 0 0>;
+-		device_type = "pci";
+-		#address-cells = <3>;
+-		#size-cells = <2>;
+-
+-		mt7996@0,0 {
+-			reg = <0x0000 0 0 0 0>;
+-			#address-cells = <1>;
+-			#size-cells = <0>;
+-			nvmem-cells = <&eeprom>;
+-			nvmem-cell-names = "eeprom";
+-			airoha,npu = <&npu>;
+-			airoha,eth = <&eth>;
+-
+-			band@0 {
+-				/* 2.4 GHz */
+-				reg = <0>;
+-				nvmem-cells = <&lan_mac 1>;
+-				nvmem-cell-names = "mac-address";
+-			};
+-
+-			band@1 {
+-				/* 5 GHz */
+-				reg = <1>;
+-				nvmem-cells = <&lan_mac 2>;
+-				nvmem-cell-names = "mac-address";
+-			};
+-
+-			band@2 {
+-				/* 6 GHz */
+-				reg = <2>;
+-				nvmem-cells = <&lan_mac 3>;
+-				nvmem-cell-names = "mac-address";
+-			};
+-		};
+-	};
+-};
+-
+-&pcie2 {
+-	status = "okay";
+-
+-	pinctrl-names = "default";
+-	pinctrl-0 = <&pcie2_rst_pins>;
+-};
+-
+-&npu {
+-	status = "okay";
+-};
+-
+-&eth {
+-	status = "okay";
+-};
+-
+-&gdm1 {
+-	status = "okay";
+-
+-	nvmem-cells = <&lan_mac 0>;
+-	nvmem-cell-names = "mac-address";
+-};
+-
+ &gdm2 {
+ 	status = "okay";
+ 
+diff --git a/target/linux/airoha/dts/an7581-xr1710g-ubi.dts b/target/linux/airoha/dts/an7581-xr1710g-ubi.dts
+new file mode 100644
+index 00000000000000..90be8295fda073
+--- /dev/null
++++ b/target/linux/airoha/dts/an7581-xr1710g-ubi.dts
+@@ -0,0 +1,147 @@
++// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 +
-+&pon_pcs {
-+	status = "okay";
++/dts-v1/;
++
++#include "an7581-gemtek-17xx-common.dtsi"
++
++/ {
++	model = "Gemtek XR1710G (OpenWrt U-Boot layout)";
++	compatible = "gemtek,xr1710g-ubi", "airoha,an7581", "airoha,en7581";
++};
++
++&en7581_pinctrl {
++	gswp1_led0_pins: gswp1-led0-pins {
++		mux {
++			function = "phy1_led0";
++			pins = "gpio33";
++		};
++	};
++
++	gswp1_led1_pins: gswp1-led1-pins {
++		mux {
++			function = "phy1_led1";
++			pins = "gpio43";
++		};
++	};
++
++	gswp2_led0_pins: gswp2-led0-pins {
++		mux {
++			function = "phy2_led0";
++			pins = "gpio34";
++		};
++	};
++
++	gswp2_led1_pins: gswp2-led1-pins {
++		mux {
++			function = "phy2_led1";
++			pins = "gpio44";
++		};
++	};
 +};
 +
 +&gdm2 {
 +	status = "okay";
 +
-+	managed = "in-band-status";
 +	phy-handle = <&phy8>;
 +	phy-mode = "usxgmii";
 +
@@ -729,14 +989,9 @@ index 0000000..3375a44
 +	openwrt,netdev-name = "wan";
 +};
 +
-+&eth_pcs {
-+	status = "okay";
-+};
-+
 +&gdm4 {
 +	status = "okay";
 +
-+	managed = "in-band-status";
 +	phy-handle = <&phy5>;
 +	phy-mode = "usxgmii";
 +
@@ -758,10 +1013,10 @@ index 0000000..3375a44
 +			reset-gpios = <&en7581_pinctrl 46 GPIO_ACTIVE_LOW>;
 +			reset-assert-us = <200000>;
 +			reset-deassert-us = <200000>;
-+			// interrupt-parent = <&en7581_pinctrl>;
-+			// interrupts = <22 IRQ_TYPE_LEVEL_LOW>;
-+			tx-polarity = <PHY_POL_INVERT>;
-+			rx-polarity = <PHY_POL_INVERT>;
++			interrupt-parent = <&en7581_pinctrl>;
++			interrupts = <22 IRQ_TYPE_LEVEL_LOW>;
++			realtek,pnswap-tx;
++			realtek,pnswap-rx;
 +		};
 +
 +		phy8: ethernet-phy@8 {
@@ -770,17 +1025,16 @@ index 0000000..3375a44
 +			reset-gpios = <&en7581_pinctrl 31 GPIO_ACTIVE_LOW>;
 +			reset-assert-us = <200000>;
 +			reset-deassert-us = <200000>;
-+			// interrupt-parent = <&en7581_pinctrl>;
-+			// interrupts = <23 IRQ_TYPE_LEVEL_LOW>;
-+			tx-polarity = <PHY_POL_INVERT>;
-+			rx-polarity = <PHY_POL_INVERT>;
++			interrupt-parent = <&en7581_pinctrl>;
++			interrupts = <23 IRQ_TYPE_LEVEL_LOW>;
++			realtek,pnswap-tx;
++			realtek,pnswap-rx;
 +		};
 +	};
 +};
 +
 +&gsw_phy1 {
 +	status = "okay";
-+	interrupts = <1>;
 +	pinctrl-names = "gbe-led";
 +	pinctrl-0 = <&gswp1_led0_pins>;
 +	pinctrl-1 = <&gswp1_led1_pins>;
@@ -807,7 +1061,6 @@ index 0000000..3375a44
 +
 +&gsw_phy2 {
 +	status = "okay";
-+	interrupts = <2>;
 +	pinctrl-names = "gbe-led";
 +	pinctrl-0 = <&gswp2_led0_pins>;
 +	pinctrl-1 = <&gswp2_led1_pins>;
@@ -831,24 +1084,38 @@ index 0000000..3375a44
 +	status = "okay";
 +	active-low;
 +};
-+
-+&uart2 {
-+	status = "okay";
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&uart2_pins>;
-+};
-+
-+&hsuart3 {
-+	status = "okay";
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&hsuart_pins>;
-+};
-\ No newline at end of file
 diff --git a/target/linux/airoha/image/an7581.mk b/target/linux/airoha/image/an7581.mk
-index eb77df6..a12aafa 100644
+index 40e0a2ac2a37a2..ed9609ff568379 100644
 --- a/target/linux/airoha/image/an7581.mk
 +++ b/target/linux/airoha/image/an7581.mk
-@@ -123,11 +123,61 @@ define Device/gemtek_w1700k-ubi
+@@ -83,24 +83,10 @@ define Device/airoha_an7581-evb-emmc-kite
+ endef
+ TARGET_DEVICES += airoha_an7581-evb-emmc-kite
+ 
+-define Device/gemtek_w1700k-ubi
+-  DEVICE_VENDOR := Gemtek
+-  DEVICE_MODEL := W1700K
+-  DEVICE_VARIANT := UBI
+-  DEVICE_ALT0_VENDOR := CenturyLink
+-  DEVICE_ALT0_MODEL := W1700K
+-  DEVICE_ALT0_VARIANT := UBI
+-  DEVICE_ALT1_VENDOR := Lumen
+-  DEVICE_ALT1_MODEL := W1700K
+-  DEVICE_ALT1_VARIANT := UBI
+-  DEVICE_ALT2_VENDOR := Quantum Fiber
+-  DEVICE_ALT2_MODEL := W1700K
+-  DEVICE_ALT2_VARIANT := UBI
+-  DEVICE_DTS := an7581-w1700k-ubi
++define Device/gemtek_17xx-common
+   DEVICE_PACKAGES := airoha-en7581-mt7996-npu-firmware \
+ 		    fitblk kmod-i2c-an7581 kmod-hwmon-nct7802 \
+-		    kmod-mt7996-firmware kmod-phy-rtl8261n \
+-		    wpad-basic-mbedtls
++		    kmod-mt7996-firmware wpad-basic-mbedtls
+   UBINIZE_OPTS := -E 5
+   BLOCKSIZE := 128k
+   PAGESIZE := 2048
+@@ -113,11 +99,43 @@ define Device/gemtek_w1700k-ubi
    IMAGES := sysupgrade.itb
    IMAGE/sysupgrade.itb := append-kernel | fit gzip $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb external-static-with-rootfs | append-metadata
    ARTIFACTS := chainload-uboot.itb
@@ -884,27 +1151,9 @@ index eb77df6..a12aafa 100644
 +  DEVICE_ALT0_MODEL := XR1710G
 +  DEVICE_ALT0_VARIANT := UBI
 +  DEVICE_DTS := an7581-xr1710g-ubi
-+  DEVICE_COMPAT_VERSION := 2.0
-+  DEVICE_COMPAT_MESSAGE := Partition table has been changed to cooperate \
-+       with the vendor bootloader with regard to the BMT/BBT partition at \
-+       the end of flash. A reinstall including corrected chainloader is needed.
-+  DEVICE_PACKAGES := airoha-en7581-mt7996-npu-firmware fitblk \
-+		    kmod-hwmon-nct7802 kmod-mt7996-firmware wpad-basic-mbedtls \
-+		    rtl826x-firmware kmod-phy-rtl8261n
-+  UBINIZE_OPTS := -E 5
-+  BLOCKSIZE := 128k
-+  PAGESIZE := 2048
-+  UBOOTENV_IN_UBI := 1
-+  KERNEL_IN_UBI := 1
-+  KERNEL := kernel-bin | gzip
-+  KERNEL_INITRAMFS := kernel-bin | lzma | \
-+	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 128k
-+  KERNEL_INITRAMFS_SUFFIX := -recovery.itb
-+  IMAGES := sysupgrade.itb
-+  IMAGE/sysupgrade.itb := append-kernel | fit gzip $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb external-static-with-rootfs | append-metadata
-+  ARTIFACTS := chainload-uboot.itb
 +  ARTIFACT/chainload-uboot.itb := an7581-chainloader gemtek_xr1710g
-+  SOC := an7581
++  $(Device/gemtek_17xx-common)
++  DEVICE_PACKAGES += kmod-phy-rtl8261n
 +endef
 +TARGET_DEVICES += gemtek_xr1710g-ubi
 +

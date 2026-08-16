@@ -25,11 +25,12 @@ name: build
 #   F7 choice 反杀 → 严禁 sed 改 choice，配置走快照/种子 + defconfig；
 #   F8 换目标重烧工具链 → 按 target/subtarget 固定工具链缓存（stamp 指纹换代）。
 #
-# 补丁双路径（PR #22397 未合入期）：先 git apply --check pr22397.diff；
-# 冲突（an7581.mk 的 DEVICE_COMPAT_VERSION 2.0 / uboot-airoha PKG_VERSION
-# 2026.07 等演化面）→ 新文件整文件覆盖 + per-file 补丁逐个应用，冲突产物归档，
-# job 失败不静默。PR 合入后：本文件注释位扩展为 sync-openwrt-main job
-# （ADR-0001 完全自主分支：每日自动合入 upstream main + mt76/hostapd）。
+# 补丁双路径（PR #22397 未合入期）：pr22397.diff = v2 补丁集（2026-08-17 主动消解
+# re-roll 对齐现网 main，见 build/patches/device-layer/README.md，含 v1 归档）。
+# 先 git apply --check pr22397.diff；冲突（上游继续演化）→ 新文件整文件覆盖 +
+# per-file 补丁逐个应用，冲突产物归档，job 失败不静默（主动消解流程 ADR-0003）。
+# PR 合入后：本文件注释位扩展为 sync-openwrt-main job
+# （ADR-0001 完全自主分支：自动合入 upstream main + mt76/hostapd，稳定期挂起）。
 #
 # 已知约束：job 级 if 只能使用 github/inputs/needs/vars 上下文（matrix 不可用），
 # 故 build 拆为 build-w1700k / build-xr1710g 两个独立 job，各自以固定 if 过滤
@@ -337,9 +338,10 @@ jobs:
           if-no-files-found: warn
 
   # ==========================================================================
-  # J2 · build-xr1710g —— 种子自举档（PR #22397 未合入期按设计可能标红）
+  # J2 · build-xr1710g —— 种子自举档（v2 补丁集 2026-08-17 已 re-roll 对齐现网 main）
   #   xr1710g profile 由 device-layer 补丁注册；config 由 CI 现场种子自举生成
-  #   （仓库不维护 xr1710g config 静态快照）。补丁冲突 → 双路径 + 归档 + 不静默。
+  #   （仓库不维护 xr1710g config 静态快照）。上游继续演化发生冲突 → 主动消解
+  #   （双路径 + 归档 + 不静默 + re-roll 流程，见 ADR-0003 修订 / device-layer README）。
   # ==========================================================================
   build-xr1710g:
     name: build-xr1710g (airoha/an7581, seed)
@@ -440,8 +442,7 @@ jobs:
             echo "device-layer: pr22397.diff 干净应用（整 diff 路径）"
           else
             echo "::warning::pr22397.diff 与当前 main 冲突（预期：an7581.mk / uboot-airoha 已演化）→ 走 per-file 路径"
-            # ① 新文件整文件覆盖（无上下文冲突）
-            cp "$DL/target/linux/airoha/dts/an7581-gemtek-17xx-common.dtsi" target/linux/airoha/dts/
+            # ① 新文件整文件覆盖（无上下文冲突；v2 无公共 dtsi）
             cp "$DL/target/linux/airoha/dts/an7581-xr1710g-ubi.dts"        target/linux/airoha/dts/
             cp "$DL/package/boot/uboot-airoha/patches/999-airoha-add-gemtek-xr1710g.patch" \
                package/boot/uboot-airoha/patches/
@@ -453,7 +454,6 @@ jobs:
               package/boot/uboot-tools/uboot-envtools/files/airoha_an7581.patch \
               package/boot/uboot-airoha/Makefile.patch \
               target/linux/airoha/image/an7581.mk.patch \
-              target/linux/airoha/dts/an7581-w1700k-ubi.dts.patch \
               target/linux/airoha/an7581/base-files/etc/board.d/02_network.patch \
               target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan.patch \
               target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh.patch ; do
