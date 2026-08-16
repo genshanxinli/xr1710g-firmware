@@ -1,0 +1,23 @@
+# OpenWrt 构建产物（本地探路构建请放到仓库外目录，如 ../openwrt-src）
+dl/
+build_dir/
+staging_dir/
+staging_dir_host/
+toolchain/
+bin/
+tmp/
+.config*
+feeds/
+*.o
+*.a
+*.so
+
+# 跟踪报告临时文件
+docs/tracking/*.tmp
+
+# 编辑器 / 操作系统
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
