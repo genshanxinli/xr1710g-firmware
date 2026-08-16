@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
 #===============================================================================
 # fetch-artifacts.sh — 从 GitHub Actions run 拉取固件产物并校验（D3/D4 管线）
+# 位置约定：tools/ci/（2026-08-17 从 build/ 移出——build/** 推送会触发 build.yml，
+#           见 docs/plan/alpha-campaign.md 关联待办「结构性修复」教训）
 #
 # 用法：
-#   bash build/fetch-artifacts.sh <run-id>          # 指定 run（API 全查下载）
-#   bash build/fetch-artifacts.sh                   # 最新 push 触发的 build run
+#   bash tools/ci/fetch-artifacts.sh <run-id>          # 指定 run（API 全查下载）
+#   bash tools/ci/fetch-artifacts.sh                   # 最新 push 触发的 build run
 #
 # 依赖：git 凭据（credential fill 取 PAT）+ curl + unzip；产物按
-#   artifacts/<runid>/<device>/ 落盘；随即跑 build/check-artifacts.sh 校验。
+#   build/artifacts/<runid>/<device>/ 落盘（build/artifacts 已 gitignore）；
+#   随即跑 tools/ci/check-artifacts.sh 校验。
 # 红线：仅下载名为 firmware-* 的产物（不碰 build-log-*）；全部只读。
 #===============================================================================
 set -u
 REPO="genshanxinli/xr1710g-firmware"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+WORK="$ROOT/build/artifacts"
 TOKEN="$(printf 'protocol=https\nhost=github.com\n' | git credential fill 2>/dev/null | sed -n 's/^password=//p')"
 [ -n "$TOKEN" ] || { echo "无法取得 GitHub 凭据（git credential fill）" >&2; exit 2; }
 AUTH="Authorization: Bearer $TOKEN"
-WORK="$(cd "$(dirname "$0")/.." && pwd)/build/artifacts"
 mkdir -p "$WORK"
 
 RUNID="${1:-}"
@@ -50,7 +54,7 @@ while read -r AID NAME; do
   curl -sL -H "$AUTH" -o "$zip" "https://api.github.com/repos/$REPO/actions/artifacts/$AID/zip"
   ( cd "$TARGET_DIR" && unzip -oq "$zip" && rm -f "$zip" )
   echo "-- check: $DEV --"
-  bash "$WORK/../check-artifacts.sh" "$TARGET_DIR" "$DEV" || exit 1
+  bash "$ROOT/tools/ci/check-artifacts.sh" "$TARGET_DIR" "$DEV" || exit 1
 done < "$WORK/.list.tmp"
 rm -f "$WORK/.list.tmp"
 echo "== fetch-artifacts done: artifacts/$RUNID/ =="

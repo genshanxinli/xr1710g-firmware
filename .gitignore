@@ -15,6 +15,9 @@ feeds/
 # 跟踪报告临时文件
 docs/tracking/*.tmp
 
+# CI 产物本地落盘（tools/ci/fetch-artifacts.sh）
+build/artifacts/
+
 # 编辑器 / 操作系统
 .DS_Store
 *.swp

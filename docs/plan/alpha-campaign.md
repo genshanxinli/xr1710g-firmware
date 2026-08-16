@@ -74,8 +74,8 @@
 | D0-5 | 测试机装 bash（opkg） | AI+人工 | `command -v bash` | D0-4（密钥） | ⏳ D0-4 后 |
 | D1 | **消解启动**：device-layer re-roll 对齐现网 main（v2 补丁集，10 文件） | AI | 冲突清单清零 | D0-3 | ✅ 2026-08-17（v2 全绿 + defconfig 三断言） |
 | D2 | CI xr1710g 档转绿（w1700k 占位档绿灯对照） | AI | Actions 绿 | D1 | 🚧 **RUNNING**（run 31963637357，make 阶段；⚠️ 31963237947 被 build/** 推送取消——教训见关联待办） |
-| D3 | 首版镜像三件套（sysupgrade/initramfs-recovery/chainload-uboot） | AI | artifact 齐全 | D2 | ⏳ 工具就绪：fetch-artifacts.sh（凭据 PAT 已验证可下载） |
-| D4 | 产物自检 + sha256 归档（对照双路径冲突面复核） | AI | 清单 | D3 | ⏳ 工具就绪：check-artifacts.sh（逻辑实测 PASS） |
+| D3 | 首版镜像三件套（sysupgrade/initramfs-recovery/chainload-uboot） | AI | artifact 齐全 | D2 | ⏳ 工具就绪：tools/ci/fetch-artifacts.sh（凭据 PAT 已验证可下载） |
+| D4 | 产物自检 + sha256 归档（对照双路径冲突面复核） | AI | 清单 | D3 | ⏳ 工具就绪：tools/ci/check-artifacts.sh（逻辑实测 PASS） |
 | D5 | 真机回归管线：冒烟脚本 + collect.sh --host 打通 | AI | 冒烟跑通（7/1/0 实测 ✅）；一次全量 real 采集 | D0-4/D0-5 | 🚧 smoke.sh 已落地并实测；collect.sh 待 bash+密钥 |
 | D6 | **首刷人工放行**：AI 产镜像 + 刷机卡 → 通知用户 → 用户手动刷入 → 回报 | 人工 | 首刷成功日志 | D3/D5 | ⏳ 待人工 |
 | D7–D13 | 每日真机回归循环（冒烟 + NPU v0 回填 + 条件专项）+ P0/P1 修复迭代 | AI+人工兜底 | 逐日报告；P0/P1→0 | D6 | ⏳ |
@@ -84,10 +84,11 @@
 关联待办（非 D 序列）：
 - ~~known-issues 清单~~ → 模板已建 `docs/testing/known-issues.md`（P2/P3 分级 + 社区基线参照归属口径）
 - ~~build.yml 注释与策略同步~~ → D1 已完成（双路径 v2；主动消解第三路径流程见 ADR-0003 修订）
-- **结构性修复（run 完成后做）**：`build/fetch-artifacts.sh`、`build/check-artifacts.sh` 移出
-  `build/`（→ `tools/ci/`）+ `.gitignore` 加 `build/artifacts/`——**教训：push 到 `build/**`
-  触发 build.yml 且 `concurrency.cancel-in-progress` 会取消在跑构建**；run 完成前严禁提交
-  `build/**`（docs/、tools/、.github 之外的提交安全）
+- **结构性修复（本地已完成，推送延迟）**：`fetch/check-artifacts.sh` 已移出 `build/`（→
+  `tools/ci/`，路径已修）+ `.gitignore` 加 `build/artifacts/` + build.yml push 触发收窄为
+  `build/patches/**`+`build/configs/**`——**教训：push 到 `build/**` 触发 build.yml 且
+  `concurrency.cancel-in-progress` 会取消在跑构建**；修复提交已在本地，**待 run 完成后再
+  push**（避免再次触发/取消）；run 完成前严禁提交 `build/**`（docs/、tools/ 之外安全）
 
 ## 5. 交接协议（新会话必读）
 
@@ -125,6 +126,10 @@
   取消旧构建。**当前 run 31963637357 双 job 已在 make（勿再提交 build/**，直到完成）**；
   公钥仍未装（BatchMode 测试 Permission denied）。结构性修复（脚本移出 build/ → tools/ci/
   + gitignore build/artifacts）挂起至 run 完成后执行。教训已入关联待办。
+- **2026-08-17 · 目标轮 4**：run 31963637357 双 job make 已跑 1.5h+（18:09 起，ETA ~21:00
+  UTC）；结构性修复**本地完成**（脚本→tools/ci/ 并修路径、.gitignore += build/artifacts/、
+  build.yml 触发收窄为 patches/configs）——**只本地提交未推送**（避免再次触发取消）；
+  推送随 run 完成后的下一批。遗留同前：D2 待绿、D0-4 公钥待用户。
 
 ## 7. 入库存档红线
 

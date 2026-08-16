@@ -41,7 +41,10 @@ on:
   push:
     branches: ['main']
     paths:
-      - 'build/**'
+      # 仅补丁/配置树推送触发构建（2026-08-17 收窄：build/** 全树触发 +
+      # concurrency.cancel-in-progress 会取消在跑构建；工具脚本已移出 build/）
+      - 'build/patches/**'
+      - 'build/configs/**'
       - '.github/workflows/build.yml'
   schedule:
     - cron: '30 3 * * *'     # 每夜 03:30 UTC · 保底构建（缓存生存线）
