@@ -1,0 +1,36 @@
+# source: gh-git
+cbe75a7b 2026-08-09 airoha: add support for Nokia XG-040G-MF (UBI)
+c7cbbebf 2026-08-09 airoha: an7583: enable UBI NVMEM and FIT block configs
+aca2c21e 2026-08-10 hostapd: ucode: fix setup of a BSS added at run time
+21a236d4 2026-06-10 kernel: add support for HeYangTek HYF1GQ4UDACAE SPI-NAND
+91a1245a 2026-08-07 airoha: an7583: enable USB on Nokia XG-040G-MF
+9ec61b88 2026-08-07 airoha: an7583: build USB support into the kernel
+afc87538 2026-08-07 airoha: an7583: add USB nodes to SoC dtsi
+38ac7888 2026-08-07 airoha: add support for AN7583 USB PHY
+ec503423 2026-08-09 airoha: an7583: add DT binding for AN7583 USB PHY
+4abffae9 2026-08-07 hostapd: update to 2.12
+53a0d547 2026-08-10 kernel: bump 6.18 to 6.18.44
+9059c31b 2026-08-04 airoha: use coherent DMA for NPU mailbox buffers
+a4c51ebd 2026-08-03 kernel: bump 6.18 to 6.18.43
+ee91a6f9 2026-08-10 airoha: configure network activity LEDs for Nokia XG-040G-MD
+9ccec981 2026-08-09 airoha: an7581: dts: update number of available gpios
+00f9f060 2026-08-09 airoha: update pinctrl driver to match linux-7.3
+3d257535 2026-08-07 airoha: npu: load the firmware without the sysfs fallback
+ab2dc6ab 2026-08-07 airoha: an7581: reserve NPU Wi-Fi regions only on Wi-Fi boards
+467c5b90 2026-08-09 airoha: fix AN7581 chainloader U-Boot filename
+76cda5dd 2026-08-09 airoha: fix U-Boot artifacts for AN7581 eMMC boards
+94a21b3f 2026-07-16 uboot-airoha: move FIP generation to target and enable autoselection
+652b2e90 2026-08-07 airoha: add missing CONFIG_AIROHA_CPU_PM_DOMAIN
+db25d50b 2026-07-07 airoha: an7581: add airoha,chip-scu phandle to scuclk node
+b3bcc4d5 2026-07-08 airoha: fix cpufreq probe failure
+044d2f52 2026-07-17 airoha: make PM domain driver working for AN7583
+34580571 2026-07-08 airoha: fix Kconfig dependency issue with PM Domain driver
+71f139a0 2026-08-07 airoha: an7583: fix ethernet breakage on Nokia XG-040G-MF
+15a2a6f4 2026-08-07 airoha: pinctrl: fix AN7583 eMMC pinmux
+9dccdd70 2026-08-07 airoha: an7581/7583: build-in I2C support
+aacb3bf4 2026-08-07 airoha: an7581: refresh config
+bd21606b 2026-08-03 airoha: an7583: refresh config
+d22a30dd 2026-06-30 airoha: an7583: remove SFP nodes from SoC DTSI
+2fca46c5 2026-06-30 airoha: an7583: correct LED node names
+ce55cdde 2026-06-30 airoha: an7583: move the switch port label from soc-level to board-level
+d2698d32 2026-06-30 airoha: an7583: disable all switch ports and PHYs by default
