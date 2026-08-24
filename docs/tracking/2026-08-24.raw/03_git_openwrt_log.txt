@@ -1,0 +1,32 @@
+# source: gh-git
+da5a0577 2026-08-22 airoha: npu: update firmware loading patch to the upstream version
+54f7b240 2026-08-21 hostapd: fix authentication with non-AP MLDs that change link addresses
+e414d5a0 2026-08-21 wpa_supplicant: reserve the configured addresses of the PHY
+44519a8d 2026-08-21 hostapd: publish the addresses of the whole PHY to the supplicant
+6124b11d 2026-08-21 hostapd: report the addresses of the whole PHY to wdev.uc
+c904ca28 2026-08-20 hostapd: let a link of an MLD use the address of the MLD
+289183cb 2026-08-21 hostapd: reserve the BSSIDs of the other radios of the PHY
+2f4f59e1 2026-08-21 hostapd: fix the address allocation of a new AP MLD
+f970f942 2026-08-07 hostapd: send ubus notifications from all links of an AP MLD
+b9b8760e 2026-08-07 hostapd: keep generated BSSIDs across an interface restart
+48f1a000 2026-08-06 hostapd: name MLD stations consistently over ubus
+1c68c06b 2026-08-09 airoha: an7581: describe EN8811H PHY by ID on Nokia XG-040G-MD
+f65530c1 2026-08-08 airoha: an7583: fix EN8811H PHY binding on Nokia XG-040G-MF
+cbe75a7b 2026-08-09 airoha: add support for Nokia XG-040G-MF (UBI)
+c7cbbebf 2026-08-09 airoha: an7583: enable UBI NVMEM and FIT block configs
+aca2c21e 2026-08-10 hostapd: ucode: fix setup of a BSS added at run time
+21a236d4 2026-06-10 kernel: add support for HeYangTek HYF1GQ4UDACAE SPI-NAND
+91a1245a 2026-08-07 airoha: an7583: enable USB on Nokia XG-040G-MF
+9ec61b88 2026-08-07 airoha: an7583: build USB support into the kernel
+afc87538 2026-08-07 airoha: an7583: add USB nodes to SoC dtsi
+38ac7888 2026-08-07 airoha: add support for AN7583 USB PHY
+ec503423 2026-08-09 airoha: an7583: add DT binding for AN7583 USB PHY
+4abffae9 2026-08-07 hostapd: update to 2.12
+53a0d547 2026-08-10 kernel: bump 6.18 to 6.18.44
+9059c31b 2026-08-04 airoha: use coherent DMA for NPU mailbox buffers
+a4c51ebd 2026-08-03 kernel: bump 6.18 to 6.18.43
+ee91a6f9 2026-08-10 airoha: configure network activity LEDs for Nokia XG-040G-MD
+9ccec981 2026-08-09 airoha: an7581: dts: update number of available gpios
+00f9f060 2026-08-09 airoha: update pinctrl driver to match linux-7.3
+3d257535 2026-08-07 airoha: npu: load the firmware without the sysfs fallback
+ab2dc6ab 2026-08-07 airoha: an7581: reserve NPU Wi-Fi regions only on Wi-Fi boards

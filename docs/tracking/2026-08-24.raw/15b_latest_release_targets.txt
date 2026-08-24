@@ -1,0 +1,3 @@
+# probed release: 25.12.5  (source: https://downloads.openwrt.org/releases/)
+# 若 targets 列表出现 airoha = 稳定版镜像信号（预判 1）
+NO_AIROHA_IN_TARGETS
