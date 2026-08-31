@@ -1,0 +1,15 @@
+# source: gh-git
+bf44cb5f 2026-08-16 mac80211: update to version 7.2
+da5a0577 2026-08-22 airoha: npu: update firmware loading patch to the upstream version
+54f7b240 2026-08-21 hostapd: fix authentication with non-AP MLDs that change link addresses
+e414d5a0 2026-08-21 wpa_supplicant: reserve the configured addresses of the PHY
+44519a8d 2026-08-21 hostapd: publish the addresses of the whole PHY to the supplicant
+6124b11d 2026-08-21 hostapd: report the addresses of the whole PHY to wdev.uc
+c904ca28 2026-08-20 hostapd: let a link of an MLD use the address of the MLD
+289183cb 2026-08-21 hostapd: reserve the BSSIDs of the other radios of the PHY
+2f4f59e1 2026-08-21 hostapd: fix the address allocation of a new AP MLD
+f970f942 2026-08-07 hostapd: send ubus notifications from all links of an AP MLD
+b9b8760e 2026-08-07 hostapd: keep generated BSSIDs across an interface restart
+48f1a000 2026-08-06 hostapd: name MLD stations consistently over ubus
+1c68c06b 2026-08-09 airoha: an7581: describe EN8811H PHY by ID on Nokia XG-040G-MD
+f65530c1 2026-08-08 airoha: an7583: fix EN8811H PHY binding on Nokia XG-040G-MF
